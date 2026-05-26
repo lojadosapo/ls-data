@@ -17,7 +17,7 @@ async function getHabllaHeaders() {
       token = login.data.accessToken;
     } catch (error) {
       // Sanitize error to avoid leaking credentials in logs
-      throw new Error(`Hablla auth failed: ${formatPublicError(error)}`);
+      throw new Error('Hablla auth failed: ' + formatPublicError(error));
     }
   }
 
