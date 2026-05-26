@@ -1,11 +1,11 @@
-# ICAIU Data
+# Loja do Sapo Data
 
 [![Node 20](https://img.shields.io/badge/node-20-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
-[![GitHub Actions](https://img.shields.io/badge/runtime-GitHub_Actions-2088FF?logo=github-actions&logoColor=white)](https://github.com/operacoesicaiu/icaiu-data/actions)
+[![GitHub Actions](https://img.shields.io/badge/runtime-GitHub_Actions-2088FF?logo=github-actions&logoColor=white)](https://github.com/lojadosapo/ls-data/actions)
 [![Supabase](https://img.shields.io/badge/storage-Supabase-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com/)
-[![Hablla Cards Workflow](https://github.com/operacoesicaiu/icaiu-data/actions/workflows/hablla-cards.yml/badge.svg)](https://github.com/operacoesicaiu/icaiu-data/actions/workflows/hablla-cards.yml)
-[![Zoho Scheduling Workflow](https://github.com/operacoesicaiu/icaiu-data/actions/workflows/zoho-scheduling.yml/badge.svg)](https://github.com/operacoesicaiu/icaiu-data/actions/workflows/zoho-scheduling.yml)
-[![Zenvia Workflow](https://github.com/operacoesicaiu/icaiu-data/actions/workflows/zenvia-calls.yml/badge.svg)](https://github.com/operacoesicaiu/icaiu-data/actions/workflows/zenvia-calls.yml)
+[![Hablla Cards Workflow](https://github.com/lojadosapo/ls-data/actions/workflows/hablla-cards.yml/badge.svg)](https://github.com/lojadosapo/ls-data/actions/workflows/hablla-cards.yml)
+[![Hablla Clients Workflow](https://github.com/lojadosapo/ls-data/actions/workflows/hablla-clients.yml/badge.svg)](https://github.com/lojadosapo/ls-data/actions/workflows/hablla-clients.yml)
+[![Zoho Service Order Workflow](https://github.com/lojadosapo/ls-data/actions/workflows/zoho-service-order.yml/badge.svg)](https://github.com/lojadosapo/ls-data/actions/workflows/zoho-service-order.yml)
 
 Coletor de dados brutos de integrações externas para o Supabase.
 
@@ -35,12 +35,8 @@ Em outras palavras, este projeto e a etapa de ingestão. Modelagem, joins, enriq
 flowchart LR
     GA[GitHub Actions ou execução local] --> API1[Hablla API]
     GA --> API2[Zoho Creator API]
-    GA --> API3[Zenvia Voice API]
-    GA --> API4[SIGE API]
     API1 --> APP[Workers Node.js]
     API2 --> APP
-    API3 --> APP
-    API4 --> APP
     APP --> SB[(Supabase raw_*)]
     SB --> DER[Camadas derivadas / analytics / BI]
 ```
@@ -54,8 +50,6 @@ flowchart LR
 ├── src/
 │   ├── hablla/           # integrações Hablla
 │   ├── zoho/             # integrações Zoho
-│   ├── zenvia/           # integração Zenvia
-│   ├── sige/             # integração SIGE
 │   └── lib/              # utilitários compartilhados
 ├── run-local.js          # runner local simples
 └── .env.example          # referência das variáveis de ambiente
@@ -126,56 +120,22 @@ Por isso a estratégia adotada aqui é:
 - Identificador externo: `attendant-{YYYY-MM-DD}-{id}`
 - Objetivo: evitar agregação indevida por período na API de summary
 
-### Zenvia Calls
-
-- Arquivo: `src/zenvia/zenvia-calls.js`
-- Fonte: relatório de chamadas ou fila
-- Destino: `raw_contact_telefonia`
-- Janela: últimos 5 dias
-- Identificador externo: `id` da chamada
-- Observação: operacionalmente a fonte costuma fazer mais sentido em execução diária, porque o dado útil geralmente fecha no dia anterior
-
-### SIGE Faturamento
-
-- Arquivo: `src/sige/sige-faturamento.js`
-- Fonte: pedidos com status `Pedido Faturado`
-- Destino: `raw_events_faturado`
-- Janela: últimos 5 dias
-- Estratégia de coleta: dia a dia
-- Identificador externo: `pedido-{Codigo}`
-
 ### Zoho Service Order Full
 
-- Arquivo: `src/zoho/zoho-leads.js`
-- Helper: `src/zoho/zoho-leads-sync.js`
-- Destino: `raw_contact_site`
+- Arquivo: `src/zoho/zoho-service-order.js`
+- Helper: `src/zoho/zoho-service-order-sync.js`
+- Destino: `raw_events_ordem_de_servico`
 - Janela: últimos 15 dias
 - Estratégia: dia a dia para evitar paginação excessiva e facilitar reprocessamento
-- Identificador externo: `lead-{ID}`
+- Identificador externo: `service-order-{ID}`
 
 ### Zoho Service Order Recent
 
-- Arquivo: `src/zoho/zoho-leads-recent.js`
-- Helper: `src/zoho/zoho-leads-sync.js`
-- Destino: `raw_contact_site`
+- Arquivo: `src/zoho/zoho-service-order-recent.js`
+- Helper: `src/zoho/zoho-service-order-sync.js`
+- Destino: `raw_events_ordem_de_servico`
 - Janela: últimos 7 dias
 - Objetivo: atualização mais frequente da janela recente
-
-### Zoho Scheduling Full
-
-- Arquivo: `src/zoho/zoho-scheduling.js`
-- Helper: `src/zoho/zoho-scheduling-sync.js`
-- Destino: `raw_events_agendamento`
-- Janela: mês atual + mês anterior
-- Identificador externo: `agendamento-{ID}`
-
-### Zoho Scheduling Recent
-
-- Arquivo: `src/zoho/zoho-scheduling-recent.js`
-- Helper: `src/zoho/zoho-scheduling-sync.js`
-- Destino: `raw_events_agendamento`
-- Janela: últimos 7 dias
-- Objetivo: atualização frequente sem rerodar a carga maior o tempo todo
 
 ## Relacionamento importante na Hablla
 
@@ -200,12 +160,8 @@ Todos os workflows também aceitam execução manual via `workflow_dispatch`.
 | Hablla Attendants | `.github/workflows/hablla-attendants.yml` | `17 6 * * *` | 1x por dia | `node src/hablla/hablla-attendants.js` |
 | Hablla Clients | `.github/workflows/hablla-clients.yml` | `5 3,9,15,21 * * *` | 4x por dia | `node src/hablla/hablla-clients.js` |
 | Hablla Cards | `.github/workflows/hablla-cards.yml` | `10 3,9,15,21 * * *` | 4x por dia | `node src/hablla/hablla-cards.js` |
-| Zenvia Calls | `.github/workflows/zenvia-calls.yml` | `17 4 * * *` | 1x por dia | `node src/zenvia/zenvia-calls.js` |
-| SIGE Faturamento | `.github/workflows/sige-faturamento.yml` | `47 4 * * *` | 1x por dia | `node src/sige/sige-faturamento.js` |
-| Zoho Scheduling Full | `.github/workflows/zoho-scheduling.yml` | `0 15 * * *` | 1x por dia | `node src/zoho/zoho-scheduling.js` |
-| Zoho Service Order Full | `.github/workflows/zoho-service-order.yml` | `30 15 * * *` | 1x por dia | `node src/zoho/zoho-leads.js` |
-| Zoho Scheduling Recent | `.github/workflows/zoho-scheduling-recent.yml` | `10 1,7,13,19 * * *` | 4x por dia | `node src/zoho/zoho-scheduling-recent.js` |
-| Zoho Service Order Recent | `.github/workflows/zoho-service-order-recent.yml` | `40 1,7,13,19 * * *` | 4x por dia | `node src/zoho/zoho-leads-recent.js` |
+| Zoho Service Order Full | `.github/workflows/zoho-service-order.yml` | `30 15 * * *` | 1x por dia | `node src/zoho/zoho-service-order.js` |
+| Zoho Service Order Recent | `.github/workflows/zoho-service-order-recent.yml` | `40 1,7,13,19 * * *` | 4x por dia | `node src/zoho/zoho-service-order-recent.js` |
 
 ### Leitura rápida em horário de Brasília
 
@@ -213,12 +169,8 @@ Considerando UTC-3:
 
 - Hablla Clients: 00:05, 06:05, 12:05, 18:05
 - Hablla Cards: 00:10, 06:10, 12:10, 18:10
-- Zenvia: 01:17
-- SIGE: 01:47
 - Hablla Attendants: 03:17
-- Zoho Scheduling Full: 12:00
 - Zoho Service Order Full: 12:30
-- Zoho Scheduling Recent: 22:10, 04:10, 10:10, 16:10
 - Zoho Service Order Recent: 22:40, 04:40, 10:40, 16:40
 
 ## Segurança e logs
@@ -262,21 +214,6 @@ Use `.env.example` como referência local. Em produção, os mesmos nomes devem 
 | `HABLLA_CARDS_MAX_PAGES` | limite defensivo de paginas em cards; padrao 500 |
 | `HABLLA_ATTENDANTS_DAYS` | quantidade de dias no sync diário de attendants |
 
-### Zenvia
-
-| Variável | Uso |
-|---|---|
-| `ZENVIA_ACCESS_TOKEN` | token de acesso da API |
-| `ZENVIA_QUEUE_ID` | fila opcional para consulta específica |
-
-### SIGE
-
-| Variável | Uso |
-|---|---|
-| `SIGE_TOKEN` | token da API |
-| `SIGE_USER` | usuário exigido pela API |
-| `SIGE_APP` | identificação da aplicação |
-
 ### Zoho
 
 | Variável | Uso |
@@ -287,8 +224,6 @@ Use `.env.example` como referência local. Em produção, os mesmos nomes devem 
 | `ZOHO_ACCOUNT_OWNER` | owner da conta/app no Zoho Creator |
 | `ZOHO_APP_NAME` | app usado na integração de ordens de serviço |
 | `ZOHO_SERVICE_ORDER_REPORT_NAME` | report de ordens de serviço |
-| `ZOHO_SCHEDULING_APP_NAME` | app usado na integração de agendamento |
-| `ZOHO_SCHEDULING_REPORT_NAME` | report de agendamento |
 
 ## Como rodar localmente
 
@@ -312,15 +247,11 @@ node run-local.js
 ### Executar uma integração específica
 
 ```bash
-node run-local.js telefonia
 node run-local.js hablla-attendants
 node run-local.js hablla-cards
 node run-local.js hablla-clients
 node run-local.js service-order
-node run-local.js agendamento
-node run-local.js faturado
 node run-local.js service-order-recent
-node run-local.js zoho-scheduling-recent
 ```
 
 ## Como adicionar uma nova integração
