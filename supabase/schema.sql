@@ -20,3 +20,46 @@ grant all on raw_contact_telefonia       to service_role;
 grant all on raw_events_faturado         to service_role;
 grant all on raw_contact_site            to service_role;
 grant all on raw_events_agendamento      to service_role;
+
+-- 3. Tabelas para integração Omie
+-- Criar as tabelas raw para dados do Omie
+
+-- Tabela para Vendas e NF-e (Produtos)
+create table if not exists raw_omie_vendas_nfe (
+  external_id text primary key,
+  payload jsonb not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+grant all on raw_omie_vendas_nfe to service_role;
+
+-- Tabela para Serviços e NFS-e
+create table if not exists raw_omie_servicos_nfse (
+  external_id text primary key,
+  payload jsonb not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+grant all on raw_omie_servicos_nfse to service_role;
+
+-- Tabela para Finanças (Contas a Receber)
+create table if not exists raw_omie_financas (
+  external_id text primary key,
+  payload jsonb not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+grant all on raw_omie_financas to service_role;
+
+-- Criar índices para melhorar performance de queries
+create index if not exists raw_omie_vendas_nfe_created_at_idx on raw_omie_vendas_nfe(created_at);
+create index if not exists raw_omie_vendas_nfe_payload_idx on raw_omie_vendas_nfe using gin(payload);
+
+create index if not exists raw_omie_servicos_nfse_created_at_idx on raw_omie_servicos_nfse(created_at);
+create index if not exists raw_omie_servicos_nfse_payload_idx on raw_omie_servicos_nfse using gin(payload);
+
+create index if not exists raw_omie_financas_created_at_idx on raw_omie_financas(created_at);
+create index if not exists raw_omie_financas_payload_idx on raw_omie_financas using gin(payload);
