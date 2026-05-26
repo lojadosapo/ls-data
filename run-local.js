@@ -4,29 +4,21 @@
  *
  * Exemplos:
  *   node run-local.js                     → roda todos
- *   node run-local.js telefonia           → só telefonia
  *   node run-local.js hablla-attendants   → só hablla attendants
  *   node run-local.js hablla-cards
  *   node run-local.js hablla-clients
  *   node run-local.js service-order
  *   node run-local.js service-order-recent
- *   node run-local.js zoho-scheduling-recent
- *   node run-local.js agendamento
- *   node run-local.js faturado
  */
 
 require('dotenv').config();
 
 const scripts = {
-  telefonia:        require('./src/zenvia/zenvia-calls'),
   'hablla-attendants': require('./src/hablla/hablla-attendants'),
   'hablla-cards':   require('./src/hablla/hablla-cards'),
   'hablla-clients': require('./src/hablla/hablla-clients'),
   'service-order': require('./src/zoho/zoho-service-order'),
-  'service-order-recent': require('./src/zoho/zoho-service-order-recent'),
-  'zoho-scheduling-recent': require('./src/zoho/zoho-scheduling-recent'),
-  agendamento:      require('./src/zoho/zoho-scheduling'),
-  faturado:         require('./src/sige/sige-faturamento')
+  'service-order-recent': require('./src/zoho/zoho-service-order-recent')
 };
 
 async function main() {
