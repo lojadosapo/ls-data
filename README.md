@@ -50,6 +50,7 @@ flowchart LR
 ├── src/
 │   ├── hablla/           # integrações Hablla
 │   ├── zoho/             # integrações Zoho
+│   ├── omie/             # integrações Omie
 │   └── lib/              # utilitários compartilhados
 ├── run-local.js          # runner local simples
 └── .env.example          # referência das variáveis de ambiente
@@ -136,6 +137,33 @@ Por isso a estratégia adotada aqui é:
 - Destino: `raw_events_ordem_de_servico`
 - Janela: últimos 7 dias
 - Objetivo: atualização mais frequente da janela recente
+
+### Omie Vendas e NF-e
+
+- Arquivo: `src/omie/omie-vendas-nfe.js`
+- Fonte: API `/produtos/pedido/` - `ListarPedidos`
+- Destino: `raw_omie_vendas_nfe`
+- Janela: últimos 30 dias por padrão (`OMIE_VENDAS_DAYS`)
+- Identificador externo: `vendas-nfe-{codigo_pedido}`
+- Objetivo: persistir vendas de produtos e NF-e para planilha de faturamento
+
+### Omie Serviços e NFS-e
+
+- Arquivo: `src/omie/omie-servicos-nfse.js`
+- Fonte: API `/servicos/os/` - `ListarOS`
+- Destino: `raw_omie_servicos_nfse`
+- Janela: últimos 30 dias por padrão (`OMIE_SERVICOS_DAYS`)
+- Identificador externo: `servicos-nfse-{nCodOS}`
+- Objetivo: persistir ordens de serviço e NFS-e para planilha de faturamento
+
+### Omie Finanças
+
+- Arquivo: `src/omie/omie-financas.js`
+- Fonte: API `/financas/contareceber/` - `ListarContasReceber`
+- Destino: `raw_omie_financas`
+- Janela: últimos 30 dias por padrão (`OMIE_FINANCAS_DAYS`)
+- Identificador externo: `financas-{codigo_lancamento}`
+- Objetivo: persistir contas a receber para planilha de faturamento
 
 ## Relacionamento importante na Hablla
 
@@ -234,6 +262,16 @@ Use `.env.example` como referência local. Em produção, os mesmos nomes devem 
 | `ZOHO_APP_NAME` | app usado na integração de ordens de serviço |
 | `ZOHO_SERVICE_ORDER_REPORT_NAME` | report de ordens de serviço |
 
+### Omie
+
+| Variável | Uso |
+|---|---|
+| `OMIE_APP_KEY` | chave de aplicação da API Omie |
+| `OMIE_APP_SECRET` | segredo de aplicação da API Omie |
+| `OMIE_VENDAS_DAYS` | quantidade de dias da janela de vendas; padrão 30 |
+| `OMIE_SERVICOS_DAYS` | quantidade de dias da janela de serviços; padrão 30 |
+| `OMIE_FINANCAS_DAYS` | quantidade de dias da janela de finanças; padrão 30 |
+
 ## Como rodar localmente
 
 ### Pré-requisitos
@@ -261,6 +299,9 @@ node run-local.js hablla-cards
 node run-local.js hablla-clients
 node run-local.js service-order
 node run-local.js service-order-recent
+node run-local.js omie-vendas-nfe
+node run-local.js omie-servicos-nfse
+node run-local.js omie-financas
 ```
 
 ## Como adicionar uma nova integração
