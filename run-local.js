@@ -9,6 +9,9 @@
  *   node run-local.js hablla-clients
  *   node run-local.js service-order
  *   node run-local.js service-order-recent
+ *   node run-local.js omie-vendas-nfe
+ *   node run-local.js omie-servicos-nfse
+ *   node run-local.js omie-financas
  */
 
 require('dotenv').config();
@@ -18,7 +21,10 @@ const scripts = {
   'hablla-cards':   require('./src/hablla/hablla-cards'),
   'hablla-clients': require('./src/hablla/hablla-clients'),
   'service-order': require('./src/zoho/zoho-service-order'),
-  'service-order-recent': require('./src/zoho/zoho-service-order-recent')
+  'service-order-recent': require('./src/zoho/zoho-service-order-recent'),
+  'omie-vendas-nfe': require('./src/omie/omie-vendas-nfe'),
+  'omie-servicos-nfse': require('./src/omie/omie-servicos-nfse'),
+  'omie-financas': require('./src/omie/omie-financas')
 };
 
 async function main() {
