@@ -25,7 +25,7 @@ async function getZohoToken() {
         return authRes.data.access_token;
     } catch (error) {
         // Sanitize error to avoid leaking credentials in logs
-        throw new Error(`Zoho auth failed: ${formatPublicError(error)}`);
+        throw new Error('Zoho auth failed: ' + formatPublicError(error));
     }
 }
 
