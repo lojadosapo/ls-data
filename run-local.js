@@ -3,7 +3,8 @@
  * Uso: node run-local.js [nome-do-script]
  *
  * Exemplos:
- *   node run-local.js                     → roda todos
+ *   node run-local.js                     → roda apenas Omie (padrão)
+ *   node run-local.js omie-vendas-nfe     → só um script específico
  *   node run-local.js hablla-attendants   → só hablla attendants
  *   node run-local.js hablla-cards
  *   node run-local.js hablla-clients
@@ -31,9 +32,13 @@ async function main() {
   const args = process.argv.slice(2);
 
   if (args.length === 0) {
+    // Sem argumentos: executa apenas scripts Omie por padrão
     for (const [name, fn] of Object.entries(scripts)) {
+      if (!name.startsWith('omie-')) continue;
       console.log(`\n========== ${name} ==========`);
-      await fn();
+      const res = await fn();
+      console.log('Retorno (JSON):');
+      console.log(JSON.stringify(res, null, 2));
     }
   } else {
     for (const arg of args) {
@@ -43,7 +48,9 @@ async function main() {
         process.exit(1);
       }
       console.log(`\n========== ${arg} ==========`);
-      await fn();
+      const res = await fn();
+      console.log('Retorno (JSON):');
+      console.log(JSON.stringify(res, null, 2));
     }
   }
 

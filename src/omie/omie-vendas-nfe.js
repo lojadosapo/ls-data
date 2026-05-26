@@ -1,6 +1,8 @@
 const callOmieAPI = require('./omie-auth');
 const supabase = require('../lib/supabase');
 const formatPublicError = require('../lib/public-error');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * Sincroniza Vendas e NF-e (Produtos) do Omie para Supabase
@@ -10,7 +12,7 @@ async function run() {
   try {
     console.log('[raw_omie_vendas_nfe] Sincronizando Vendas e NF-e...');
 
-    const days = Number(process.env.OMIE_VENDAS_DAYS || 30);
+    const days = Number(process.env.OMIE_VENDAS_DAYS || 15);
     if (!Number.isInteger(days) || days < 1) {
       throw new Error('OMIE_VENDAS_DAYS precisa ser inteiro >= 1');
     }
@@ -40,7 +42,9 @@ async function run() {
         pagina,
         registros_por_pagina: registrosPorPagina,
         apenas_importado_api: 'N',
-        ordenar_por: 'DATA_PREVISAO'
+        ordenar_por: 'DATA_PREVISAO',
+        filtrar_por_data_de: formatDate(dataInicial),
+        filtrar_por_data_ate: formatDate(dataFinal)
       };
 
       const response = await callOmieAPI('/produtos/pedido/', 'ListarPedidos', [params]);
@@ -65,17 +69,34 @@ async function run() {
 
     if (!allRecords.length) {
       console.log('[raw_omie_vendas_nfe] Nenhum registro encontrado.');
-      return;
+      fs.writeFileSync(path.join(__dirname, '../../output/omie-vendas-nfe.json'), '[]');
+      return [];
     }
 
-    // Inserir no Supabase
-    const { error } = await supabase
-      .from('raw_omie_vendas_nfe')
-      .upsert(allRecords, { onConflict: 'external_id' });
+    // Salvar localmente
+    const outputDir = path.join(__dirname, '../../output');
+    fs.mkdirSync(outputDir, { recursive: true });
+    fs.writeFileSync(path.join(outputDir, 'omie-vendas-nfe.json'), JSON.stringify(allRecords, null, 2));
+    console.log(`[raw_omie_vendas_nfe] JSON salvo em output/omie-vendas-nfe.json`);
 
-    if (error) throw error;
+    // Tentar salvar no Supabase, mas não abortar se falhar
+    try {
+      const { error } = await supabase
+        .from('raw_omie_vendas_nfe')
+        .upsert(allRecords, { onConflict: 'external_id' });
 
-    console.log(`[raw_omie_vendas_nfe] ${allRecords.length} registros enviados ao Supabase.`);
+      if (error) {
+        console.error('[raw_omie_vendas_nfe] Aviso: erro ao salvar no Supabase:', formatPublicError(error));
+        console.log('[raw_omie_vendas_nfe] Dados retornados mesmo assim para validação.');
+      } else {
+        console.log(`[raw_omie_vendas_nfe] ${allRecords.length} registros enviados ao Supabase.`);
+      }
+    } catch (supaErr) {
+      console.error('[raw_omie_vendas_nfe] Aviso: exceção ao salvar no Supabase:', supaErr.message);
+      console.log('[raw_omie_vendas_nfe] Dados retornados mesmo assim para validação.');
+    }
+
+    return allRecords;
   } catch (err) {
     console.error('[raw_omie_vendas_nfe] Erro:', formatPublicError(err));
     process.exit(1);

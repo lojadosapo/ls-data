@@ -1,6 +1,8 @@
 const callOmieAPI = require('./omie-auth');
 const supabase = require('../lib/supabase');
 const formatPublicError = require('../lib/public-error');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * Sincroniza Serviços e NFS-e do Omie para Supabase
@@ -10,7 +12,7 @@ async function run() {
   try {
     console.log('[raw_omie_servicos_nfse] Sincronizando Serviços e NFS-e...');
 
-    const days = Number(process.env.OMIE_SERVICOS_DAYS || 30);
+    const days = Number(process.env.OMIE_SERVICOS_DAYS || 15);
     if (!Number.isInteger(days) || days < 1) {
       throw new Error('OMIE_SERVICOS_DAYS precisa ser inteiro >= 1');
     }
@@ -37,8 +39,10 @@ async function run() {
     // Paginar através de todas as ordens de serviço
     while (pagina <= totalPaginas) {
       const params = {
-        nPagina: pagina,
-        nRegPorPagina: registrosPorPagina
+        pagina,
+        registros_por_pagina: registrosPorPagina,
+        filtrar_por_data_de: formatDate(dataInicial),
+        filtrar_por_data_ate: formatDate(dataFinal)
       };
 
       const response = await callOmieAPI('/servicos/os/', 'ListarOS', [params]);
@@ -63,17 +67,34 @@ async function run() {
 
     if (!allRecords.length) {
       console.log('[raw_omie_servicos_nfse] Nenhum registro encontrado.');
-      return;
+      fs.writeFileSync(path.join(__dirname, '../../output/omie-servicos-nfse.json'), '[]');
+      return [];
     }
 
-    // Inserir no Supabase
-    const { error } = await supabase
-      .from('raw_omie_servicos_nfse')
-      .upsert(allRecords, { onConflict: 'external_id' });
+    // Salvar localmente
+    const outputDir = path.join(__dirname, '../../output');
+    fs.mkdirSync(outputDir, { recursive: true });
+    fs.writeFileSync(path.join(outputDir, 'omie-servicos-nfse.json'), JSON.stringify(allRecords, null, 2));
+    console.log(`[raw_omie_servicos_nfse] JSON salvo em output/omie-servicos-nfse.json`);
 
-    if (error) throw error;
+    // Tentar salvar no Supabase, mas não abortar se falhar
+    try {
+      const { error } = await supabase
+        .from('raw_omie_servicos_nfse')
+        .upsert(allRecords, { onConflict: 'external_id' });
 
-    console.log(`[raw_omie_servicos_nfse] ${allRecords.length} registros enviados ao Supabase.`);
+      if (error) {
+        console.error('[raw_omie_servicos_nfse] Aviso: erro ao salvar no Supabase:', formatPublicError(error));
+        console.log('[raw_omie_servicos_nfse] Dados retornados mesmo assim para validação.');
+      } else {
+        console.log(`[raw_omie_servicos_nfse] ${allRecords.length} registros enviados ao Supabase.`);
+      }
+    } catch (supaErr) {
+      console.error('[raw_omie_servicos_nfse] Aviso: exceção ao salvar no Supabase:', supaErr.message);
+      console.log('[raw_omie_servicos_nfse] Dados retornados mesmo assim para validação.');
+    }
+
+    return allRecords;
   } catch (err) {
     console.error('[raw_omie_servicos_nfse] Erro:', formatPublicError(err));
     process.exit(1);
