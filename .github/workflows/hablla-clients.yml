@@ -2,8 +2,12 @@ name: Hablla Clients
 
 on:
   schedule:
-    - cron: '5 3,9,15,21 * * *'
+    - cron: '18 3,9,15,21 * * *'
   workflow_dispatch:
+
+concurrency:
+  group: hablla-clients
+  cancel-in-progress: false
 
 jobs:
   run:
@@ -12,7 +16,26 @@ jobs:
 
     steps:
 
-      - uses: actions/checkout@v4
+      - name: Random delay to avoid rate limiting
+        run: sleep $((RANDOM % 30 + 10))
+      
+      - name: Checkout with retry
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+        continue-on-error: true
+        id: checkout1
+      
+      - name: Retry checkout if failed
+        if: steps.checkout1.outcome == 'failure'
+        run: |
+          sleep $((RANDOM % 20 + 10))
+        
+      - name: Checkout retry attempt
+        if: steps.checkout1.outcome == 'failure'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - uses: actions/setup-node@v4
         with:
