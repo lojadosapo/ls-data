@@ -14,15 +14,7 @@ Sincroniza dados de **Vendas e NF-e** (produtos e acessórios).
 
 **Tabela Supabase:** `raw_omie_vendas_nfe`
 
-**Campos mapeados:**
-- `data_emissao` - Data de Emissão completa
-- `pedido_numero` - Número do pedido/venda
-- `vendedor` - Nome do colaborador responsável
-- `cliente_razao_social` - Razão Social do cliente
-- `total_nota_fiscal` - Valor total da nota fiscal
-- `tipo_produto_servico` - "Produto"
-- `minha_empresa` - Nome Fantasia da filial/unidade
-- `nota_fiscal_numero` - Número da NF
+**Dados retornados:** Payload completo e bruto da API Omie, incluindo todos os campos disponíveis de pedidos, produtos, clientes, notas fiscais, vendedores, etc.
 
 ### omie-servicos-nfse.js
 Sincroniza dados de **Serviços e NFS-e** (ordens de serviço).
@@ -31,15 +23,7 @@ Sincroniza dados de **Serviços e NFS-e** (ordens de serviço).
 
 **Tabela Supabase:** `raw_omie_servicos_nfse`
 
-**Campos mapeados:**
-- `data_emissao` - Data de Emissão completa
-- `pedido_numero` - Número da ordem de serviço
-- `vendedor` - Nome do colaborador responsável
-- `cliente_razao_social` - Razão Social do cliente
-- `total_nota_fiscal` - Valor total da ordem de serviço
-- `tipo_produto_servico` - "Serviço"
-- `minha_empresa` - Nome Fantasia da filial/unidade
-- `nota_fiscal_numero` - Número da NF
+**Dados retornados:** Payload completo e bruto da API Omie, incluindo todos os campos disponíveis de ordens de serviço, serviços, clientes, notas fiscais, vendedores, etc.
 
 ### omie-financas.js
 Sincroniza dados de **Finanças** (Contas a Receber).
@@ -48,15 +32,7 @@ Sincroniza dados de **Finanças** (Contas a Receber).
 
 **Tabela Supabase:** `raw_omie_financas`
 
-**Campos mapeados:**
-- `data_emissao` - Data de Emissão
-- `pedido_numero` - Número do pedido/documento
-- `vendedor` - Nome do vendedor
-- `cliente_razao_social` - Razão Social do cliente
-- `total_nota_fiscal` - Valor do documento
-- `tipo_produto_servico` - Tipo do documento ou "Financeiro"
-- `minha_empresa` - Nome da empresa
-- `nota_fiscal_numero` - Número da nota fiscal
+**Dados retornados:** Payload completo e bruto da API Omie, incluindo todos os campos disponíveis de contas a receber, clientes, documentos, etc.
 
 ## Configuração
 
@@ -101,8 +77,17 @@ Todos os workflows podem ser executados manualmente via `workflow_dispatch`.
 
 Cada registro é armazenado no Supabase com a seguinte estrutura:
 - `external_id` - ID único do registro (usado para upsert)
-- `payload` - Objeto completo retornado pela API do Omie
-- `payload._mapped` - Campos mapeados para facilitar queries
+- `payload` - Objeto completo retornado pela API do Omie, sem nenhum processamento ou mapeamento adicional
+
+O payload contém todos os dados brutos da API, incluindo:
+- Informações do pedido/ordem de serviço/conta
+- Dados do cliente (razão social, CNPJ, endereço, etc.)
+- Informações do vendedor
+- Detalhes de produtos/serviços
+- Valores e impostos
+- Informações da nota fiscal
+- Dados da empresa/filial
+- E todos os demais campos retornados pela API Omie
 
 ## Tabelas Supabase Necessárias
 

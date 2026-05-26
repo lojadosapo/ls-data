@@ -4,15 +4,7 @@ const formatPublicError = require('../lib/public-error');
 
 /**
  * Sincroniza registros de Finanças (Contas a Receber) do Omie para Supabase
- * Campos mapeados:
- * - Data de Emissão
- * - Pedido (Número do pedido/venda)
- * - Vendedor (Nome do colaborador responsável)
- * - Cliente (Razão Social)
- * - Total da Nota Fiscal / Valor
- * - Tipo do Produto / Serviço
- * - Minha Empresa (Nome Fantasia)
- * - Nota Fiscal (Número da NF)
+ * Retorna todos os dados brutos da API Omie sem mapeamento adicional
  */
 async function run() {
   try {
@@ -54,24 +46,9 @@ async function run() {
 
       if (response.conta_receber_cadastro) {
         for (const conta of response.conta_receber_cadastro) {
-          // Extrair os campos principais conforme especificado
-          const mappedData = {
-            data_emissao: conta.data_emissao || conta.dDtEmissao || null,
-            pedido_numero: conta.numero_pedido || conta.numero_documento || conta.codigo_lancamento || null,
-            vendedor: conta.vendedor || null,
-            cliente_razao_social: conta.razao_social || conta.nome_cliente || null,
-            total_nota_fiscal: conta.valor_documento || conta.valor || 0,
-            tipo_produto_servico: conta.tipo_documento || 'Financeiro',
-            minha_empresa: conta.nome_empresa || null,
-            nota_fiscal_numero: conta.numero_nota_fiscal || conta.numero_documento_fiscal || null
-          };
-
           allRecords.push({
             external_id: `financas-${conta.codigo_lancamento_omie || conta.codigo_lancamento}`,
-            payload: {
-              ...conta,
-              _mapped: mappedData
-            }
+            payload: conta
           });
         }
       }

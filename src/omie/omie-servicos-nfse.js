@@ -4,15 +4,7 @@ const formatPublicError = require('../lib/public-error');
 
 /**
  * Sincroniza Serviços e NFS-e do Omie para Supabase
- * Campos mapeados:
- * - Data de Emissão
- * - Pedido (Número do pedido/venda)
- * - Vendedor (Nome do colaborador responsável)
- * - Cliente (Razão Social)
- * - Total da Nota Fiscal / Valor
- * - Tipo do Produto / Serviço
- * - Minha Empresa (Nome Fantasia)
- * - Nota Fiscal (Número da NF)
+ * Retorna todos os dados brutos da API Omie sem mapeamento adicional
  */
 async function run() {
   try {
@@ -53,24 +45,9 @@ async function run() {
 
       if (response.osLista) {
         for (const os of response.osLista) {
-          // Extrair os campos principais conforme especificado
-          const mappedData = {
-            data_emissao: os.Cabecalho?.dDtPrevisao || os.Cabecalho?.dDtEmissao || null,
-            pedido_numero: os.Cabecalho?.nCodOS || os.Cabecalho?.cNumOS || null,
-            vendedor: os.Cabecalho?.cVendedor || null,
-            cliente_razao_social: os.Cabecalho?.cNomeCliente || os.Cabecalho?.cRazaoSocial || null,
-            total_nota_fiscal: os.TotalOS?.nValorTotal || 0,
-            tipo_produto_servico: 'Serviço',
-            minha_empresa: os.InformacoesAdicionais?.cNomeFantasia || null,
-            nota_fiscal_numero: os.NotaFiscal?.nNumeroNF || os.NotaFiscal?.cNumeroNF || null
-          };
-
           allRecords.push({
             external_id: `servicos-nfse-${os.Cabecalho?.nCodOS || os.nCodOS}`,
-            payload: {
-              ...os,
-              _mapped: mappedData
-            }
+            payload: os
           });
         }
       }

@@ -20,19 +20,44 @@
 - ✅ `supabase/schema.sql` atualizado com tabelas Omie
 - ✅ `README.md` atualizado com documentação Omie
 
-## 📋 Campos Mapeados
+## 📋 Dados Retornados
 
-Todos os três módulos mapeiam os seguintes campos conforme solicitado:
-1. **Data de Emissão** (completa)
-2. **Pedido** (Número do pedido/venda)
-3. **Vendedor** (Nome do colaborador responsável)
-4. **Cliente** (Razão Social)
-5. **Total da Nota Fiscal / Valor**
-6. **Tipo do Produto / Serviço** (Produto, Serviço ou Financeiro)
-7. **Minha Empresa** (Nome Fantasia)
-8. **Nota Fiscal** (Número da NF)
+Todos os três módulos retornam o **payload completo e bruto** da API Omie, sem nenhum processamento ou mapeamento adicional. Isso inclui todos os campos disponíveis:
 
-Os campos mapeados são salvos em `payload._mapped` de cada registro.
+### Vendas e NF-e (omie-vendas-nfe.js)
+- Informações completas do pedido
+- Dados do cabeçalho (datas, números, status)
+- Informações do cliente (razão social, CNPJ, endereço, contatos)
+- Dados do vendedor
+- Detalhes de todos os produtos/itens
+- Valores totais, impostos, descontos
+- Informações da nota fiscal
+- Dados da empresa/filial
+- Informações adicionais e observações
+
+### Serviços e NFS-e (omie-servicos-nfse.js)
+- Informações completas da ordem de serviço
+- Dados do cabeçalho (datas, números, status)
+- Informações do cliente
+- Dados do vendedor/responsável
+- Detalhes de todos os serviços
+- Valores totais, impostos, retenções
+- Informações da nota fiscal de serviço
+- Dados da empresa/filial
+- Informações adicionais
+
+### Finanças (omie-financas.js)
+- Informações completas da conta a receber
+- Dados do lançamento
+- Informações do cliente/pagador
+- Dados do vendedor
+- Valores, datas de vencimento e pagamento
+- Informações de documentos e notas fiscais vinculadas
+- Categorias e centros de custo
+- Status de pagamento
+- Informações bancárias
+
+Os campos foram mencionados na especificação apenas como exemplo para identificar quais endpoints usar, mas o sistema retorna **todos os dados disponíveis** da API Omie para análise posterior.
 
 ## 🔧 Próximos Passos
 
@@ -128,28 +153,24 @@ Remova o `#` para ativar o agendamento automático.
 
 ## 🎯 Como os Dados Podem Ser Usados
 
-Os dados coletados alimentam uma planilha de faturamento. Cada registro em `payload._mapped` contém os campos necessários:
+Os dados coletados são salvos completamente brutos, contendo todos os campos retornados pela API Omie. Você pode consultar e extrair os campos necessários via SQL no Supabase.
 
-```javascript
-{
-  data_emissao: "15/05/2024",
-  pedido_numero: "12345",
-  vendedor: "João Silva",
-  cliente_razao_social: "Empresa XYZ Ltda",
-  total_nota_fiscal: 1500.00,
-  tipo_produto_servico: "Produto",
-  minha_empresa: "Loja do Sapo - Matriz",
-  nota_fiscal_numero: "000123"
-}
-```
+Exemplo de consulta para extrair campos específicos de vendas:
 
-Esses campos podem ser consultados via SQL no Supabase:
 ```sql
 SELECT 
-  payload->>'_mapped'->>'data_emissao' as data_emissao,
-  payload->>'_mapped'->>'pedido_numero' as pedido,
-  payload->>'_mapped'->>'cliente_razao_social' as cliente,
-  payload->>'_mapped'->>'total_nota_fiscal' as valor
+  payload->'cabecalho'->>'data_previsao' as data_emissao,
+  payload->'cabecalho'->>'numero_pedido' as pedido,
+  payload->'cabecalho'->>'vendedor' as vendedor,
+  payload->'cabecalho'->>'nome_cliente' as cliente,
+  payload->'total_pedido'->>'valor_total_pedido' as valor,
+  payload->'nota_fiscal'->>'numero' as nota_fiscal
 FROM raw_omie_vendas_nfe
 ORDER BY created_at DESC;
 ```
+
+O payload completo permite que você:
+- Extraia qualquer campo necessário sem limitações
+- Crie diferentes visualizações/relatórios conforme necessário
+- Reprocesse os dados de maneiras diferentes sem nova coleta
+- Acesse campos que podem não ter sido considerados inicialmente

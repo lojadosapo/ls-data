@@ -4,15 +4,7 @@ const formatPublicError = require('../lib/public-error');
 
 /**
  * Sincroniza Vendas e NF-e (Produtos) do Omie para Supabase
- * Campos mapeados:
- * - Data de Emissão
- * - Pedido (Número do pedido/venda)
- * - Vendedor (Nome do colaborador responsável)
- * - Cliente (Razão Social)
- * - Total da Nota Fiscal / Valor
- * - Tipo do Produto / Serviço
- * - Minha Empresa (Nome Fantasia)
- * - Nota Fiscal (Número da NF)
+ * Retorna todos os dados brutos da API Omie sem mapeamento adicional
  */
 async function run() {
   try {
@@ -55,24 +47,9 @@ async function run() {
 
       if (response.pedido_venda_produto) {
         for (const pedido of response.pedido_venda_produto) {
-          // Extrair os campos principais conforme especificado
-          const mappedData = {
-            data_emissao: pedido.cabecalho?.data_previsao || pedido.cabecalho?.dDataPrevisao || null,
-            pedido_numero: pedido.cabecalho?.numero_pedido || pedido.cabecalho?.codigo_pedido || null,
-            vendedor: pedido.cabecalho?.vendedor || null,
-            cliente_razao_social: pedido.cabecalho?.nome_cliente || pedido.cliente?.razao_social || null,
-            total_nota_fiscal: pedido.total_pedido?.valor_total_pedido || pedido.total_pedido?.vTotPed || 0,
-            tipo_produto_servico: 'Produto',
-            minha_empresa: pedido.cabecalho?.nome_fantasia || pedido.informacoes_adicionais?.nomeFantasia || null,
-            nota_fiscal_numero: pedido.nota_fiscal?.numero || pedido.nota_fiscal?.nNF || null
-          };
-
           allRecords.push({
             external_id: `vendas-nfe-${pedido.cabecalho?.codigo_pedido || pedido.codigo_pedido}`,
-            payload: {
-              ...pedido,
-              _mapped: mappedData
-            }
+            payload: pedido
           });
         }
       }
