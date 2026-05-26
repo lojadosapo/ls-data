@@ -175,20 +175,29 @@ Considerando UTC-3:
 
 ## Segurança e logs
 
-Como o repositório e os workflows podem ter execução pública, os scripts ativos foram ajustados para evitar dumping de respostas completas de erro.
+Como o repositório e os workflows podem ter execução pública, os scripts ativos foram ajustados para evitar dumping de respostas completas de erro e exposição de dados sensíveis.
 
-Hoje os logs de erro são sanitizados e mostram apenas dados operacionais como:
+### Práticas de segurança implementadas
 
-- status HTTP
-- código de erro
-- mensagem resumida
+1. **Sanitização de erros**: todos os erros são filtrados pela função `formatPublicError()` que extrai apenas:
+   - status HTTP
+   - código de erro
+   - mensagem resumida (sem detalhes internos)
 
-O projeto não deve fazer log de:
+2. **Proteção de credenciais**: módulos de autenticação (`hablla-auth.js`, `zoho-auth.js`) capturam erros e evitam que credenciais sejam expostas em logs
 
-- tokens
-- segredos
-- payload bruto completo
-- resposta completa de erro da API
+3. **Sem logging de payloads**: o projeto não faz log de:
+   - tokens de acesso
+   - segredos e senhas
+   - payload bruto completo das APIs
+   - resposta completa de erro das APIs
+   - URLs com parâmetros sensíveis
+
+4. **Logs operacionais apenas**: os logs mostram apenas dados operacionais como:
+   - quantidade de registros processados
+   - número de páginas consultadas
+   - status de execução (sucesso/erro)
+   - mensagens de erro sanitizadas
 
 ## Variáveis de ambiente
 
