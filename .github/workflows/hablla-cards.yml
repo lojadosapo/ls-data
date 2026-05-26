@@ -2,16 +2,39 @@ name: Hablla Cards
 
 on:
   schedule:
-    - cron: '10 3,9,15,21 * * *'
+    - cron: '7 3,9,15,21 * * *'
   workflow_dispatch:
+
+concurrency:
+  group: hablla-cards
+  cancel-in-progress: false
 
 jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Checkout
+      - name: Random delay to avoid rate limiting
+        run: sleep $((RANDOM % 30 + 10))
+      
+      - name: Checkout with retry
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+        continue-on-error: true
+        id: checkout1
+      
+      - name: Retry checkout if failed
+        if: steps.checkout1.outcome == 'failure'
+        run: |
+          sleep $((RANDOM % 20 + 10))
+        
+      - name: Checkout retry attempt
+        if: steps.checkout1.outcome == 'failure'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
