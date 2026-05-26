@@ -26,7 +26,7 @@ async function getHabllaHeaders() {
   }
 
   return {
-    Authorization: isWorkspaceToken ? token : `******
+    Authorization: isWorkspaceToken ? token : 'Bearer ' + token,
     accept: 'application/json'
   };
 }
