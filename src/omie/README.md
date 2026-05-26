@@ -23,6 +23,10 @@ Sincroniza dados de **Serviços e NFS-e** (ordens de serviço).
 
 **Tabela Supabase:** `raw_omie_servicos_nfse`
 
+**Parâmetros importantes:** 
+- `filtrar_por_data_tipo`: Define o tipo de data usado no filtro (ex: 'emissao', 'cadastro', 'modificacao')
+- `apenas_importado_api`: 'N' para retornar todos os registros (não apenas os importados via API)
+
 **Dados retornados:** Payload completo e bruto da API Omie, incluindo todos os campos disponíveis de ordens de serviço, serviços, clientes, notas fiscais, vendedores, etc.
 
 ### omie-financas.js

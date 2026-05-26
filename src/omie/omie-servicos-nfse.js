@@ -41,6 +41,8 @@ async function run() {
       const params = {
         pagina,
         registros_por_pagina: registrosPorPagina,
+        apenas_importado_api: 'N',
+        filtrar_por_data_tipo: 'emissao',
         filtrar_por_data_de: formatDate(dataInicial),
         filtrar_por_data_ate: formatDate(dataFinal)
       };
