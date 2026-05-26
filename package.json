@@ -1,0 +1,11 @@
+{
+  "name": "icaiu-data",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.8",
+    "axios": "^1.9.0",
+    "dotenv": "^16.6.1",
+    "ws": "^8.18.2"
+  }
+}
