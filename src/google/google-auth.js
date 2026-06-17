@@ -1,6 +1,4 @@
 const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
 const axios = require('axios');
 
 const GOOGLE_TOKEN_URI = 'https://oauth2.googleapis.com/token';
@@ -14,44 +12,8 @@ function base64url(value) {
     .replace(/\//g, '_');
 }
 
-function readMultilinePrivateKeyFromEnvFile() {
-  const envPath = path.resolve(process.cwd(), '.env');
-  if (!fs.existsSync(envPath)) return '';
-
-  const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
-  const start = lines.findIndex((line) => line.startsWith('GOOGLE_PRIVATE_KEY='));
-  if (start < 0) return '';
-
-  const firstValue = lines[start].split('=', 2)[1] || '';
-  const keyLines = [firstValue];
-
-  for (let i = start + 1; i < lines.length; i++) {
-    const line = lines[i];
-    if (/^[A-Z][A-Z0-9_]*=/.test(line)) break;
-    if (!line.trim()) break;
-    keyLines.push(line);
-    if (line.includes('END PRIVATE KEY')) break;
-  }
-
-  return keyLines.join('\n');
-}
-
 function normalizePrivateKey(value) {
-  let key = value || readMultilinePrivateKeyFromEnvFile();
-  key = String(key || '').trim().replace(/^["']|["']$/g, '').replace(/\\n/g, '\n');
-
-  if (key.includes('BEGIN PRIVATE KEY') && !key.includes('END PRIVATE KEY')) {
-    const fileKey = readMultilinePrivateKeyFromEnvFile();
-    if (fileKey.length > key.length) {
-      key = fileKey.trim().replace(/^["']|["']$/g, '').replace(/\\n/g, '\n');
-    }
-  }
-
-  if (key.includes('BEGIN PRIVATE KEY') && !key.includes('END PRIVATE KEY')) {
-    key = `${key}\n-----END PRIVATE KEY-----`;
-  }
-
-  return key;
+  return String(value || '').trim().replace(/^["']|["']$/g, '').replace(/\\n/g, '\n');
 }
 
 async function getGoogleAccessToken() {
@@ -59,10 +21,7 @@ async function getGoogleAccessToken() {
   const privateKey = normalizePrivateKey(process.env.GOOGLE_PRIVATE_KEY);
 
   if (!clientEmail || !privateKey) {
-    if (process.env.GOOGLE_TOKEN) {
-      return process.env.GOOGLE_TOKEN;
-    }
-    throw new Error('GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY ou GOOGLE_TOKEN sao obrigatorios');
+    throw new Error('Credenciais Google ausentes');
   }
 
   const now = Math.floor(Date.now() / 1000);
@@ -90,9 +49,15 @@ async function getGoogleAccessToken() {
     assertion
   });
 
-  const response = await axios.post(GOOGLE_TOKEN_URI, body.toString(), {
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-  });
+  let response;
+  try {
+    response = await axios.post(GOOGLE_TOKEN_URI, body.toString(), {
+      timeout: 60000,
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+  } catch (error) {
+    throw new Error(`Google OAuth falhou: status=${error.response?.status || 'network'}`);
+  }
 
   if (!response.data?.access_token) {
     throw new Error('Google OAuth nao retornou access_token');

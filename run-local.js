@@ -13,7 +13,6 @@
  *   node run-local.js omie-vendas-nfe
  *   node run-local.js omie-servicos-nfse
  *   node run-local.js omie-financas
- *   node run-local.js omie-sheets-sync
  */
 
 require('dotenv').config();
@@ -26,8 +25,7 @@ const scripts = {
   'service-order-recent': require('./src/zoho/zoho-service-order-recent'),
   'omie-vendas-nfe': require('./src/omie/omie-vendas-nfe'),
   'omie-servicos-nfse': require('./src/omie/omie-servicos-nfse'),
-  'omie-financas': require('./src/omie/omie-financas'),
-  'omie-sheets-sync': require('./src/omie/omie-sheets-sync')
+  'omie-financas': require('./src/omie/omie-financas')
 };
 
 async function main() {
@@ -37,7 +35,6 @@ async function main() {
     // Sem argumentos: executa apenas scripts Omie por padrão
     for (const [name, fn] of Object.entries(scripts)) {
       if (!name.startsWith('omie-')) continue;
-      if (name === 'omie-sheets-sync') continue;
       console.log(`\n========== ${name} ==========`);
       const res = await fn();
       console.log('Retorno (JSON):');

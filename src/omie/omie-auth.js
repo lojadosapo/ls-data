@@ -56,9 +56,11 @@ async function callOmieAPI(endpoint, call, param = []) {
     return response.data;
   } catch (error) {
     if (error.response?.data) {
-      throw new Error(`Omie API Error: ${JSON.stringify(error.response.data)}`);
+      const status = error.response.status || 'unknown';
+      const faultCode = error.response.data.faultcode || error.response.data.code || 'unknown';
+      throw new Error(`Omie API Error: status=${status} code=${faultCode}`);
     }
-    throw error;
+    throw new Error(`Omie API Error: code=${error.code || 'network'}`);
   }
 }
 

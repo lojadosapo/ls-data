@@ -38,10 +38,7 @@ class SheetsClient {
           continue;
         }
 
-        const apiMessage = error.response?.data?.error?.message;
-        throw new Error(
-          `Google Sheets API falhou: status=${status || 'network'} message=${apiMessage || error.message}`
-        );
+        throw new Error(`Google Sheets API falhou: status=${status || 'network'}`);
       }
     }
 

@@ -1,7 +1,3 @@
-require('dotenv').config();
-
-const fs = require('fs');
-const path = require('path');
 const axios = require('axios');
 const { getGoogleAccessToken } = require('../google/google-auth');
 const SheetsClient = require('../google/sheets-client');
@@ -9,7 +5,7 @@ const SheetsClient = require('../google/sheets-client');
 const OMIE_BASE_URL = 'https://app.omie.com.br/api/v1';
 const DEFAULT_SPREADSHEET_ID = '1BvBqDjJGpYCasrU82CoeaYavw_zFqV_xOFAzw3bZ_bU';
 const TZ = 'America/Sao_Paulo';
-const PAGE_SIZE_VARIATION = Number(process.env.OMIE_PAGE_SIZE_VARIATION || (Date.now() % 7));
+const PAGE_SIZE_VARIATION = Date.now() % 7;
 
 const PRODUCT_SHEET = 'Produtos e Servicos';
 const VENDOR_SHEET = 'Vendedor';
@@ -26,10 +22,6 @@ function sleep(ms) {
 function sanitize(value) {
   if (typeof value !== 'string') return value;
   return ['=', '+', '-', '@'].some((char) => value.startsWith(char)) ? `'${value}` : value;
-}
-
-function parseBool(value) {
-  return ['1', 'true', 'yes', 'y', 'sim'].includes(String(value || '').toLowerCase());
 }
 
 function normalizeText(value) {
@@ -235,7 +227,7 @@ async function callOmie(account, endpoint, call, param = {}) {
     const message = response.data?.faultstring || response.data?.message || `HTTP ${response.status}`;
     if (message.includes('Consumo redundante') && attempt < 3) {
       const wait = Number(message.match(/Aguarde\s+(\d+)\s+segundos/)?.[1] || 10) + 1;
-      secureLog(`${call} aguardando ${Math.min(wait, 60)}s por consumo redundante (${account.name})`);
+      secureLog(`${call}: aguardando para repetir a chamada`);
       await sleep(Math.min(wait, 60) * 1000);
       continue;
     }
@@ -251,14 +243,14 @@ async function callOmie(account, endpoint, call, param = {}) {
         message.includes('timeout')
       )
     ) {
-      secureLog(`${call} retry temporario ${attempt + 1}/3 (${account.name})`);
+      secureLog(`${call}: repetindo chamada temporariamente indisponivel`);
       await sleep((attempt + 1) * 3000);
       continue;
     }
-    throw new Error(`${call} falhou para ${account.name}: ${message}`);
+    throw new Error(`${call} falhou na API Omie`);
   }
 
-  throw new Error(`${call} falhou para ${account.name}`);
+  throw new Error(`${call} falhou na API Omie`);
 }
 
 async function listAll(account, endpoint, call, listKey, params = {}, pageSize = 100) {
@@ -746,14 +738,6 @@ function deleteRequestsForIndexes(sheetId, indexes) {
   return requests;
 }
 
-function writeBackup(payload) {
-  const dir = process.env.OMIE_SHEETS_BACKUP_DIR || path.join(process.cwd(), 'tmp', 'sheets-backups');
-  fs.mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, `omie-sheets-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
-  fs.writeFileSync(file, JSON.stringify(payload, null, 2));
-  return file;
-}
-
 async function buildRowsForWindow(accounts, startDate, endDate) {
   const contexts = [];
   for (const account of accounts) {
@@ -764,41 +748,36 @@ async function buildRowsForWindow(accounts, startDate, endDate) {
   const productRows = [];
   const serviceRows = [];
   const vendorRows = [];
-  const accountLogs = [];
+  const rawTotals = { pedidos: 0, cupons: 0, ordens: 0, contas: 0 };
 
   secureLog(`Coletando Omie por intervalo: ${formatDateBR(startDate)} ate ${formatDateBR(endDate)}`);
-  for (const ctx of contexts) {
-    secureLog(`Coletando conta ${ctx.account.name} (${ctx.companyName})`);
+  for (let index = 0; index < contexts.length; index++) {
+    const ctx = contexts[index];
     const rows = await fetchAccountWindowRows(ctx, startDate, endDate);
     productRows.push(...rows.productRows);
     serviceRows.push(...rows.serviceRows);
     vendorRows.push(...rows.vendorRows);
-    accountLogs.push({
-      account: ctx.account.name,
-      company: ctx.companyName,
-      startDate: dateKey(startDate),
-      endDate: dateKey(endDate),
-      ...rows.rawCounts
-    });
-    secureLog(
-      `${ctx.companyName}: pedidos=${rows.rawCounts.pedidos}, cupons=${rows.rawCounts.cupons}, ` +
-      `os=${rows.rawCounts.ordens}, contas=${rows.rawCounts.contas}`
-    );
+    rawTotals.pedidos += rows.rawCounts.pedidos;
+    rawTotals.cupons += rows.rawCounts.cupons;
+    rawTotals.ordens += rows.rawCounts.ordens;
+    rawTotals.contas += rows.rawCounts.contas;
+    secureLog(`Fonte Omie ${index + 1}/${contexts.length} processada`);
   }
 
-  return { contexts, productRows, serviceRows, vendorRows, accountLogs };
+  secureLog(
+    `Coleta concluida: pedidos=${rawTotals.pedidos}, cupons=${rawTotals.cupons}, ` +
+    `ordens=${rawTotals.ordens}, contas=${rawTotals.contas}`
+  );
+  return { contexts, productRows, serviceRows, vendorRows };
 }
 
 async function run() {
   const days = Number(process.env.OMIE_SHEETS_DAYS || 7);
   if (!Number.isInteger(days) || days < 1) throw new Error('OMIE_SHEETS_DAYS precisa ser inteiro >= 1');
 
-  const dryRun = parseBool(process.env.OMIE_SHEETS_DRY_RUN);
   const spreadsheetId = process.env.OMIE_SHEETS_SPREADSHEET_ID || process.env.SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
   const today = todayInSaoPaulo();
-  const endDate = process.env.OMIE_SHEETS_END_DATE
-    ? parseOmieDate(process.env.OMIE_SHEETS_END_DATE)
-    : addDays(today, -1);
+  const endDate = addDays(today, -1);
   const startDate = addDays(endDate, -(days - 1));
 
   const accounts = parseAccountsFromEnv();
@@ -816,7 +795,7 @@ async function run() {
     throw new Error(`Abas obrigatorias nao encontradas: ${VENDOR_SHEET}, ${PRODUCT_SHEET}`);
   }
 
-  const { contexts, productRows, serviceRows, vendorRows, accountLogs } = await buildRowsForWindow(accounts, startDate, endDate);
+  const { contexts, productRows, serviceRows, vendorRows } = await buildRowsForWindow(accounts, startDate, endDate);
   const { productValues, vendorValues } = prepareFinalRows(productRows, serviceRows, vendorRows, lookups);
   const companies = new Set(contexts.map((ctx) => normalizeText(ctx.companyName)));
 
@@ -842,35 +821,7 @@ async function run() {
     companies
   });
 
-  const backupFile = writeBackup({
-    window: { startKey, endKey },
-    companies: [...companies],
-    productDeleteIndexes,
-    vendorDeleteIndexes,
-    productRows: productDeleteIndexes.map((index) => ({
-      sheetRow: index + 1,
-      values: currentProductRows[index]
-    })),
-    vendorRows: vendorDeleteIndexes.map((index) => ({
-      sheetRow: index + 1,
-      values: currentVendorRows[index]
-    })),
-    accountLogs
-  });
-
-  secureLog(`Backup operacional salvo: ${backupFile}`);
   secureLog(`Linhas a remover: ${PRODUCT_SHEET}=${productDeleteIndexes.length}; ${VENDOR_SHEET}=${vendorDeleteIndexes.length}`);
-
-  if (dryRun) {
-    secureLog('DRY_RUN ativo: nenhuma alteracao foi enviada ao Sheets.');
-    return {
-      dryRun,
-      productDeleteCount: productDeleteIndexes.length,
-      vendorDeleteCount: vendorDeleteIndexes.length,
-      productAppendCount: productValues.length,
-      vendorAppendCount: vendorValues.length
-    };
-  }
 
   const deleteRequests = [
     ...deleteRequestsForIndexes(sheetIds[PRODUCT_SHEET], productDeleteIndexes),
@@ -916,7 +867,6 @@ async function run() {
     `Atualizacao validada: ${PRODUCT_SHEET}=${productWindowCount}; ${VENDOR_SHEET}=${vendorWindowCount}`
   );
   return {
-    dryRun,
     productDeleteCount: productDeleteIndexes.length,
     vendorDeleteCount: vendorDeleteIndexes.length,
     productAppendCount: productValues.length,
