@@ -302,6 +302,7 @@ node run-local.js service-order-recent
 node run-local.js omie-vendas-nfe
 node run-local.js omie-servicos-nfse
 node run-local.js omie-financas
+node run-local.js omie-sheets-sync
 ```
 
 ## Como adicionar uma nova integração

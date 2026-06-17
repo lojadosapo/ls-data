@@ -42,9 +42,9 @@ async function run() {
         pagina,
         registros_por_pagina: registrosPorPagina,
         apenas_importado_api: 'N',
-        ordenar_por: 'DATA_PREVISAO',
-        filtrar_por_data_de: formatDate(dataInicial),
-        filtrar_por_data_ate: formatDate(dataFinal)
+        data_faturamento_de: formatDate(dataInicial),
+        data_faturamento_ate: formatDate(dataFinal),
+        status_pedido: 'FATURADO'
       };
 
       const response = await callOmieAPI('/produtos/pedido/', 'ListarPedidos', [params]);

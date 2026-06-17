@@ -1,0 +1,62 @@
+name: Omie Sheets Sync
+
+on:
+  schedule:
+    # 06:00, 10:00, 14:00, 18:00 America/Sao_Paulo (UTC-3)
+    - cron: '0 9,13,17,21 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Executar sem alterar o Sheets'
+        required: false
+        default: 'false'
+      days:
+        description: 'Quantidade de dias para reprocessar'
+        required: false
+        default: '7'
+
+concurrency:
+  group: omie-sheets-sync
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Random delay to avoid rate limiting
+        run: sleep $((RANDOM % 30 + 10))
+
+      - name: Checkout with retry
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+        continue-on-error: true
+        id: checkout1
+
+      - name: Retry checkout if failed
+        if: steps.checkout1.outcome == 'failure'
+        run: sleep $((RANDOM % 20 + 10))
+
+      - name: Checkout retry attempt
+        if: steps.checkout1.outcome == 'failure'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm install
+
+      - name: Sync Omie to Google Sheets
+        run: node src/omie/omie-sheets-sync.js
+        env:
+          OMIE_CREDENTIALS: ${{ secrets.OMIE_CREDENTIALS }}
+          GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
+          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
+          GOOGLE_TOKEN: ${{ secrets.GOOGLE_TOKEN }}
+          OMIE_SHEETS_SPREADSHEET_ID: ${{ vars.OMIE_SHEETS_SPREADSHEET_ID }}
+          OMIE_SHEETS_DAYS: ${{ github.event.inputs.days || vars.OMIE_SHEETS_DAYS || '7' }}
+          OMIE_SHEETS_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}

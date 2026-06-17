@@ -2,3 +2,9 @@ node_modules/
 .env
 tmp/
 output/
+__pycache__/
+Omie_local/output/
+Omie_local/Base exportada/
+Omie_local/Base tratada/
+Omie_local/Funcao Atual/
+Omie_local/Sheets/
