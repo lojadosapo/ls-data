@@ -18,11 +18,6 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function sanitize(value) {
-  if (typeof value !== 'string') return value;
-  return ['=', '+', '-', '@'].some((char) => value.startsWith(char)) ? `'${value}` : value;
-}
-
 function normalizeText(value) {
   return String(value || '').normalize('NFC').trim().toLocaleLowerCase('pt-BR');
 }
@@ -585,12 +580,12 @@ async function loadLookups(sheets) {
     typeRows,
     collaboratorRows,
     employeeRows
-  ] = await Promise.all([
-    sheets.getValues('class_produto!A:B'),
-    sheets.getValues('class_device!A:B'),
-    sheets.getValues('class_Tipo!A:B'),
-    sheets.getValues('_Colaborador!A:B'),
-    sheets.getValues('Colaboradores!A:D')
+  ] = await sheets.getValuesBatch([
+    'class_produto!A:B',
+    'class_device!A:B',
+    'class_Tipo!A:B',
+    '_Colaborador!A:B',
+    'Colaboradores!A:D'
   ]);
 
   const typeByCategory = rowsToMap(typeRows);
@@ -645,16 +640,16 @@ function prepareFinalRows(productRows, serviceRows, vendorRows, lookups) {
     .sort((a, b) => `${a.dateKey}|${a.company}|${a.finalInvoice}|${a.description}`.localeCompare(`${b.dateKey}|${b.company}|${b.finalInvoice}|${b.description}`, 'pt-BR'))
     .map((row) => [
       formatDateBR(row.date),
-      sanitize(row.company),
+      row.company,
       row.finalInvoice,
-      sanitize(row.description),
-      sanitize(row.vendor),
+      row.description,
+      row.vendor,
       row.amount,
       assistanceByDoc.get(`${normalizeText(row.company)}|${row.finalInvoice}`) || 'Não',
-      sanitize(row.productType),
-      sanitize(row.category),
-      sanitize(row.device),
-      sanitize(lookups.accessByVendor.get(normalizeText(row.vendor))?.[1] || '#N/A')
+      row.productType,
+      row.category,
+      row.device,
+      lookups.accessByVendor.get(normalizeText(row.vendor))?.[1] || '#N/A'
     ]);
 
   const vendorValues = vendorRows
@@ -664,17 +659,17 @@ function prepareFinalRows(productRows, serviceRows, vendorRows, lookups) {
       const category = sector.includes('Comercial - Sede') ? 'comercial' : 'unidades';
       return [
         formatDateBR(row.date),
-        sanitize(row.document),
-        sanitize(row.vendor),
-        sanitize(row.client),
+        row.document,
+        row.vendor,
+        row.client,
         row.amount,
-        sanitize(row.type),
-        sanitize(row.company),
+        row.type,
+        row.company,
         row.documentNumber,
         assistanceByDoc.get(`${normalizeText(row.company)}|${row.documentNumber}`) || 'Não',
-        sanitize(sector),
+        sector,
         category,
-        sanitize(lookups.accessByVendor.get(normalizeText(row.vendor))?.[1] || '#N/A')
+        lookups.accessByVendor.get(normalizeText(row.vendor))?.[1] || '#N/A'
       ];
     });
 
@@ -693,48 +688,132 @@ function rowIndexesForWindow(rows, { startKey, endKey, companyColumnIndex, compa
   return indexes;
 }
 
-function countRowsForWindow(rows, { startKey, endKey, companyColumnIndex, companies }) {
-  return rows.filter((row) => {
-    const key = parseDateValue(row[0]);
-    const company = normalizeText(row[companyColumnIndex]);
-    return key && key >= startKey && key <= endKey && companies.has(company);
-  }).length;
+function googleDateSerial(value) {
+  const match = String(value || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return null;
+  const timestamp = Date.UTC(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+  return timestamp / 86400000 + 25569;
 }
 
-function deleteRequestsForIndexes(sheetId, indexes) {
-  const sorted = [...indexes].sort((a, b) => b - a);
-  const requests = [];
-  let groupEnd = null;
-  let groupStart = null;
-
-  for (const idx of sorted) {
-    if (groupEnd == null) {
-      groupStart = idx;
-      groupEnd = idx + 1;
-      continue;
+function cellData(value, columnIndex, { allowFormula = false } = {}) {
+  if (columnIndex === 0) {
+    const serial = googleDateSerial(value);
+    if (serial != null) {
+      return { userEnteredValue: { numberValue: serial } };
     }
-    if (idx === groupStart - 1) {
-      groupStart = idx;
-      continue;
-    }
-    requests.push({
-      deleteDimension: {
-        range: { sheetId, dimension: 'ROWS', startIndex: groupStart, endIndex: groupEnd }
-      }
-    });
-    groupStart = idx;
-    groupEnd = idx + 1;
   }
 
-  if (groupEnd != null) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return { userEnteredValue: { numberValue: value } };
+  }
+  if (typeof value === 'boolean') {
+    return { userEnteredValue: { boolValue: value } };
+  }
+  if (value == null) {
+    return {};
+  }
+  if (allowFormula && typeof value === 'string' && value.startsWith('=')) {
+    return { userEnteredValue: { formulaValue: value } };
+  }
+  return { userEnteredValue: { stringValue: String(value) } };
+}
+
+function replacementRequests({
+  sheetId,
+  gridRowCount,
+  columnCount,
+  currentRows,
+  deleteIndexes,
+  newRows
+}) {
+  const indexes = new Set(deleteIndexes);
+  const preservedRows = currentRows.filter((row, index) => !indexes.has(index));
+  const finalRows = [...preservedRows, ...newRows];
+  const requiredRowCount = Math.max(currentRows.length, finalRows.length);
+  const requests = [];
+
+  if (requiredRowCount > gridRowCount) {
     requests.push({
-      deleteDimension: {
-        range: { sheetId, dimension: 'ROWS', startIndex: groupStart, endIndex: groupEnd }
+      appendDimension: {
+        sheetId,
+        dimension: 'ROWS',
+        length: requiredRowCount - gridRowCount
+      }
+    });
+  }
+
+  requests.push({
+    updateCells: {
+      range: {
+        sheetId,
+        startRowIndex: 0,
+        endRowIndex: requiredRowCount,
+        startColumnIndex: 0,
+        endColumnIndex: columnCount
+      },
+      rows: [
+        ...preservedRows.map((row) => ({
+          values: row.map((value, columnIndex) => cellData(value, columnIndex, { allowFormula: true }))
+        })),
+        ...newRows.map((row) => ({
+          values: row.map((value, columnIndex) => cellData(value, columnIndex))
+        }))
+      ],
+      fields: 'userEnteredValue'
+    }
+  });
+
+  if (finalRows.length > 1) {
+    requests.push({
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: 1,
+          endRowIndex: finalRows.length,
+          startColumnIndex: 0,
+          endColumnIndex: 1
+        },
+        cell: {
+          userEnteredFormat: {
+            numberFormat: { type: 'DATE', pattern: 'dd/MM/yyyy' }
+          }
+        },
+        fields: 'userEnteredFormat.numberFormat'
       }
     });
   }
 
   return requests;
+}
+
+function atomicReplacementRequests({
+  productSheet,
+  vendorSheet,
+  currentProductRows,
+  currentVendorRows,
+  productDeleteIndexes,
+  vendorDeleteIndexes,
+  productValues,
+  vendorValues
+}) {
+  return [
+    ...replacementRequests({
+      sheetId: productSheet.sheetId,
+      gridRowCount: productSheet.gridProperties.rowCount,
+      columnCount: 11,
+      currentRows: currentProductRows,
+      deleteIndexes: productDeleteIndexes,
+      newRows: productValues
+    }),
+    ...replacementRequests({
+      sheetId: vendorSheet.sheetId,
+      gridRowCount: vendorSheet.gridProperties.rowCount,
+      columnCount: 12,
+      currentRows: currentVendorRows,
+      deleteIndexes: vendorDeleteIndexes,
+      newRows: vendorValues
+    })
+  ];
 }
 
 async function buildRowsForWindow(accounts, startDate, endDate) {
@@ -777,7 +856,7 @@ async function run() {
   const spreadsheetId = process.env.OMIE_SHEETS_SPREADSHEET_ID;
   if (!spreadsheetId) throw new Error('Identificador do Google Sheets ausente');
   const today = todayInSaoPaulo();
-  const endDate = addDays(today, -1);
+  const endDate = today;
   const startDate = addDays(endDate, -(days - 1));
 
   const accounts = parseAccountsFromEnv();
@@ -789,9 +868,12 @@ async function run() {
   const accessToken = await getGoogleAccessToken();
   const sheets = new SheetsClient({ spreadsheetId, accessToken });
   const lookups = await loadLookups(sheets);
-  const sheetIds = await sheets.getSheetIdByTitle();
+  const spreadsheet = await sheets.getSpreadsheet();
+  const sheetsByTitle = Object.fromEntries(
+    (spreadsheet.sheets || []).map((sheet) => [sheet.properties.title, sheet.properties])
+  );
 
-  if (sheetIds[VENDOR_SHEET] == null || sheetIds[PRODUCT_SHEET] == null) {
+  if (!sheetsByTitle[VENDOR_SHEET] || !sheetsByTitle[PRODUCT_SHEET]) {
     throw new Error(`Abas obrigatorias nao encontradas: ${VENDOR_SHEET}, ${PRODUCT_SHEET}`);
   }
 
@@ -801,10 +883,13 @@ async function run() {
 
   secureLog(`Linhas novas: ${PRODUCT_SHEET}=${productValues.length}; ${VENDOR_SHEET}=${vendorValues.length}`);
 
-  const [currentProductRows, currentVendorRows] = await Promise.all([
-    sheets.getValues(`${PRODUCT_SHEET}!A:K`),
-    sheets.getValues(`${VENDOR_SHEET}!A:L`)
-  ]);
+  const [currentProductRows, currentVendorRows] = await sheets.getValuesBatch(
+    [`${PRODUCT_SHEET}!A:K`, `${VENDOR_SHEET}!A:L`],
+    {
+      valueRenderOption: 'FORMULA',
+      dateTimeRenderOption: 'SERIAL_NUMBER'
+    }
+  );
 
   const startKey = dateKey(startDate);
   const endKey = dateKey(endDate);
@@ -823,48 +908,22 @@ async function run() {
 
   secureLog(`Linhas a remover: ${PRODUCT_SHEET}=${productDeleteIndexes.length}; ${VENDOR_SHEET}=${vendorDeleteIndexes.length}`);
 
-  const deleteRequests = [
-    ...deleteRequestsForIndexes(sheetIds[PRODUCT_SHEET], productDeleteIndexes),
-    ...deleteRequestsForIndexes(sheetIds[VENDOR_SHEET], vendorDeleteIndexes)
-  ];
-  await sheets.batchUpdate(deleteRequests);
-  await sheets.appendValues(`${PRODUCT_SHEET}!A:K`, productValues);
-  await sheets.appendValues(`${VENDOR_SHEET}!A:L`, vendorValues);
-
-  const updatedSpreadsheet = await sheets.getSpreadsheet();
-  const updatedProperties = Object.fromEntries(
-    (updatedSpreadsheet.sheets || []).map((sheet) => [sheet.properties.title, sheet.properties])
-  );
-  const productEndRow = updatedProperties[PRODUCT_SHEET].gridProperties.rowCount;
-  const vendorEndRow = updatedProperties[VENDOR_SHEET].gridProperties.rowCount;
-  const productStartRow = Math.max(2, productEndRow - productValues.length - 100);
-  const vendorStartRow = Math.max(2, vendorEndRow - vendorValues.length - 100);
-  const [updatedProductRows, updatedVendorRows] = await Promise.all([
-    sheets.getValues(`${PRODUCT_SHEET}!A${productStartRow}:K${productEndRow}`),
-    sheets.getValues(`${VENDOR_SHEET}!A${vendorStartRow}:L${vendorEndRow}`)
-  ]);
-  const productWindowCount = countRowsForWindow(updatedProductRows, {
-    startKey,
-    endKey,
-    companyColumnIndex: 1,
-    companies
+  const requests = atomicReplacementRequests({
+    productSheet: sheetsByTitle[PRODUCT_SHEET],
+    vendorSheet: sheetsByTitle[VENDOR_SHEET],
+    currentProductRows,
+    currentVendorRows,
+    productDeleteIndexes,
+    vendorDeleteIndexes,
+    productValues,
+    vendorValues
   });
-  const vendorWindowCount = countRowsForWindow(updatedVendorRows, {
-    startKey,
-    endKey,
-    companyColumnIndex: 6,
-    companies
-  });
-
-  if (productWindowCount !== productValues.length || vendorWindowCount !== vendorValues.length) {
-    throw new Error(
-      `Validacao pos-escrita falhou: ${PRODUCT_SHEET}=${productWindowCount}/${productValues.length}; ` +
-      `${VENDOR_SHEET}=${vendorWindowCount}/${vendorValues.length}`
-    );
-  }
+  secureLog(`Aplicando lote atomico no Google Sheets: requests=${requests.length}`);
+  await sheets.batchUpdate(requests, { idempotent: true });
 
   secureLog(
-    `Atualizacao validada: ${PRODUCT_SHEET}=${productWindowCount}; ${VENDOR_SHEET}=${vendorWindowCount}`
+    `Atualizacao atomica confirmada pela API: ` +
+    `${PRODUCT_SHEET}=${productValues.length}; ${VENDOR_SHEET}=${vendorValues.length}`
   );
   return {
     productDeleteCount: productDeleteIndexes.length,
@@ -875,6 +934,12 @@ async function run() {
 }
 
 module.exports = run;
+module.exports._internals = {
+  atomicReplacementRequests,
+  cellData,
+  googleDateSerial,
+  replacementRequests
+};
 
 if (require.main === module) {
   run().catch((err) => {

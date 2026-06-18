@@ -26,19 +26,25 @@ class SheetsClient {
     });
   }
 
-  async request(config) {
-    for (let attempt = 0; attempt < 4; attempt++) {
+  async request(config, { maxAttempts = 4, operation = config.url } = {}) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         return await this.http.request(config);
       } catch (error) {
         const status = error.response?.status;
-        const retryable = status === 429 || status >= 500 || ['ECONNRESET', 'ETIMEDOUT'].includes(error.code);
-        if (retryable && attempt < 3) {
+        const retryable =
+          status === 429 ||
+          status >= 500 ||
+          ['ECONNABORTED', 'ECONNRESET', 'ETIMEDOUT'].includes(error.code);
+        if (retryable && attempt < maxAttempts - 1) {
           await sleep((attempt + 1) * 2000);
           continue;
         }
 
-        throw new Error(`Google Sheets API falhou: status=${status || 'network'}`);
+        throw new Error(
+          `Google Sheets API falhou em ${operation}: ` +
+          `status=${status || 'network'} code=${error.code || 'unknown'}`
+        );
       }
     }
 
@@ -77,13 +83,44 @@ class SheetsClient {
     return response.data.values || [];
   }
 
-  async batchUpdate(requests) {
-    if (!requests.length) return { skipped: true };
-    const response = await this.request({
-      method: 'post',
-      url: ':batchUpdate',
-      data: { requests }
+  async getValuesBatch(ranges, {
+    valueRenderOption = 'FORMATTED_VALUE',
+    dateTimeRenderOption = 'FORMATTED_STRING'
+  } = {}) {
+    const params = new URLSearchParams({
+      valueRenderOption,
+      dateTimeRenderOption
     });
+    for (const range of ranges) params.append('ranges', range);
+
+    const response = await this.request(
+      {
+        method: 'get',
+        url: '/values:batchGet',
+        params
+      },
+      {
+        operation: `batchGet(${ranges.join(', ')})`
+      }
+    );
+    return (response.data.valueRanges || []).map((item) => item.values || []);
+  }
+
+  async batchUpdate(requests, { idempotent = false } = {}) {
+    if (!requests.length) return { skipped: true };
+    const response = await this.request(
+      {
+        method: 'post',
+        url: ':batchUpdate',
+        timeout: 240000,
+        data: { requests }
+      },
+      {
+        // Only absolute-value rewrites are safe to retry after an ambiguous timeout.
+        maxAttempts: idempotent ? 2 : 1,
+        operation: 'spreadsheets.batchUpdate'
+      }
+    );
     return response.data;
   }
 
