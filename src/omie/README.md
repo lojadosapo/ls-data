@@ -77,14 +77,11 @@ node run-local.js omie-financas
 
 ## GitHub Actions
 
-Os workflows estão configurados em `.github/workflows/` com os schedules **comentados** por padrão:
-- `omie-vendas-nfe.yml` - Diariamente às 7:30 UTC (comentado)
-- `omie-servicos-nfse.yml` - Diariamente às 7:45 UTC (comentado)
-- `omie-financas.yml` - Diariamente às 8:00 UTC (comentado)
+O workflow único `.github/workflows/omie-sheets-sync.yml` coleta vendas, cupons, serviços e financeiro antes de atualizar as duas abas do Google Sheets.
 
-Para ativar, descomente as linhas `schedule:` e `- cron:` nos arquivos YAML.
+Horários: 05:47, 09:47, 13:47 e 17:47 no horário de São Paulo.
 
-Todos os workflows podem ser executados manualmente via `workflow_dispatch`.
+O workflow também pode ser executado manualmente via `workflow_dispatch`.
 
 ## Estrutura dos Dados
 
