@@ -3,7 +3,6 @@ const { getGoogleAccessToken } = require('../google/google-auth');
 const SheetsClient = require('../google/sheets-client');
 
 const OMIE_BASE_URL = 'https://app.omie.com.br/api/v1';
-const DEFAULT_SPREADSHEET_ID = '1BvBqDjJGpYCasrU82CoeaYavw_zFqV_xOFAzw3bZ_bU';
 const TZ = 'America/Sao_Paulo';
 const PAGE_SIZE_VARIATION = Date.now() % 7;
 
@@ -775,7 +774,8 @@ async function run() {
   const days = Number(process.env.OMIE_SHEETS_DAYS || 7);
   if (!Number.isInteger(days) || days < 1) throw new Error('OMIE_SHEETS_DAYS precisa ser inteiro >= 1');
 
-  const spreadsheetId = process.env.OMIE_SHEETS_SPREADSHEET_ID || process.env.SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
+  const spreadsheetId = process.env.OMIE_SHEETS_SPREADSHEET_ID;
+  if (!spreadsheetId) throw new Error('Identificador do Google Sheets ausente');
   const today = todayInSaoPaulo();
   const endDate = addDays(today, -1);
   const startDate = addDays(endDate, -(days - 1));
