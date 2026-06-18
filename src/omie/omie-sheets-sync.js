@@ -824,6 +824,14 @@ function atomicReplacementRequests({
   ];
 }
 
+function appendedRange(sheetName, endColumn, currentRows, deleteIndexes, newRows) {
+  if (!newRows.length) return null;
+  const preservedRowCount = currentRows.length - deleteIndexes.length;
+  const startRow = preservedRowCount + 1;
+  const endRow = startRow + newRows.length - 1;
+  return `${sheetName}!A${startRow}:${endColumn}${endRow}`;
+}
+
 async function buildRowsForWindow(accounts, startDate, endDate) {
   const contexts = [];
   for (const account of accounts) {
@@ -929,10 +937,28 @@ async function run() {
   secureLog(`Aplicando lote atomico no Google Sheets: requests=${requests.length}`);
   await sheets.batchUpdate(requests, { idempotent: true });
 
-  const [updatedProductRows, updatedVendorRows] = await sheets.getValuesBatch([
-    `${PRODUCT_SHEET}!A:K`,
-    `${VENDOR_SHEET}!A:L`
-  ]);
+  const productValidationRange = appendedRange(
+    PRODUCT_SHEET,
+    'K',
+    currentProductRows,
+    productDeleteIndexes,
+    productValues
+  );
+  const vendorValidationRange = appendedRange(
+    VENDOR_SHEET,
+    'L',
+    currentVendorRows,
+    vendorDeleteIndexes,
+    vendorValues
+  );
+  const validationRanges = [productValidationRange, vendorValidationRange].filter(Boolean);
+  secureLog(`Lote atomico aplicado; validando faixas: ${validationRanges.join('; ') || 'sem linhas novas'}`);
+  const validationRows = validationRanges.length
+    ? await sheets.getValuesBatch(validationRanges)
+    : [];
+  let validationIndex = 0;
+  const updatedProductRows = productValidationRange ? validationRows[validationIndex++] : [];
+  const updatedVendorRows = vendorValidationRange ? validationRows[validationIndex++] : [];
   const productWindowCount = countRowsForWindow(updatedProductRows, {
     startKey,
     endKey,
@@ -966,6 +992,7 @@ async function run() {
 
 module.exports = run;
 module.exports._internals = {
+  appendedRange,
   atomicReplacementRequests,
   cellData,
   googleDateSerial,
