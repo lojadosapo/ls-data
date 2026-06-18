@@ -2,7 +2,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
-  appendedRange,
   atomicReplacementRequests,
   cellData,
   googleDateSerial
@@ -54,12 +53,4 @@ test('builds one idempotent atomic rewrite for both sheets', () => {
   assert.deepEqual(productRows[2].values[2], {
     userEnteredValue: { stringValue: '=texto literal' }
   });
-});
-
-test('limits post-write validation to the newly appended rows', () => {
-  assert.equal(
-    appendedRange('Produtos e Servicos', 'K', new Array(100), [2, 3, 8], new Array(5)),
-    'Produtos e Servicos!A98:K102'
-  );
-  assert.equal(appendedRange('Vendedor', 'L', new Array(10), [4], []), null);
 });
