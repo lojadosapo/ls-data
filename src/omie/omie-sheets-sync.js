@@ -580,12 +580,12 @@ async function loadLookups(sheets) {
     typeRows,
     collaboratorRows,
     employeeRows
-  ] = await Promise.all([
-    sheets.getValues('class_produto!A:B'),
-    sheets.getValues('class_device!A:B'),
-    sheets.getValues('class_Tipo!A:B'),
-    sheets.getValues('_Colaborador!A:B'),
-    sheets.getValues('Colaboradores!A:D')
+  ] = await sheets.getValuesBatch([
+    'class_produto!A:B',
+    'class_device!A:B',
+    'class_Tipo!A:B',
+    '_Colaborador!A:B',
+    'Colaboradores!A:D'
   ]);
 
   const typeByCategory = rowsToMap(typeRows);
@@ -696,42 +696,6 @@ function countRowsForWindow(rows, { startKey, endKey, companyColumnIndex, compan
   }).length;
 }
 
-function deleteRequestsForIndexes(sheetId, indexes) {
-  const sorted = [...indexes].sort((a, b) => b - a);
-  const requests = [];
-  let groupEnd = null;
-  let groupStart = null;
-
-  for (const idx of sorted) {
-    if (groupEnd == null) {
-      groupStart = idx;
-      groupEnd = idx + 1;
-      continue;
-    }
-    if (idx === groupStart - 1) {
-      groupStart = idx;
-      continue;
-    }
-    requests.push({
-      deleteDimension: {
-        range: { sheetId, dimension: 'ROWS', startIndex: groupStart, endIndex: groupEnd }
-      }
-    });
-    groupStart = idx;
-    groupEnd = idx + 1;
-  }
-
-  if (groupEnd != null) {
-    requests.push({
-      deleteDimension: {
-        range: { sheetId, dimension: 'ROWS', startIndex: groupStart, endIndex: groupEnd }
-      }
-    });
-  }
-
-  return requests;
-}
-
 function googleDateSerial(value) {
   const match = String(value || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   if (!match) return null;
@@ -739,16 +703,11 @@ function googleDateSerial(value) {
   return timestamp / 86400000 + 25569;
 }
 
-function cellData(value, columnIndex) {
+function cellData(value, columnIndex, { allowFormula = false } = {}) {
   if (columnIndex === 0) {
     const serial = googleDateSerial(value);
     if (serial != null) {
-      return {
-        userEnteredValue: { numberValue: serial },
-        userEnteredFormat: {
-          numberFormat: { type: 'DATE', pattern: 'dd/MM/yyyy' }
-        }
-      };
+      return { userEnteredValue: { numberValue: serial } };
     }
   }
 
@@ -761,35 +720,107 @@ function cellData(value, columnIndex) {
   if (value == null) {
     return {};
   }
+  if (allowFormula && typeof value === 'string' && value.startsWith('=')) {
+    return { userEnteredValue: { formulaValue: value } };
+  }
   return { userEnteredValue: { stringValue: String(value) } };
 }
 
-function appendCellsRequest(sheetId, values) {
-  if (!values.length) return [];
-  return [{
-    appendCells: {
-      sheetId,
-      rows: values.map((row) => ({
-        values: row.map((value, columnIndex) => cellData(value, columnIndex))
-      })),
-      fields: 'userEnteredValue,userEnteredFormat.numberFormat'
+function replacementRequests({
+  sheetId,
+  gridRowCount,
+  columnCount,
+  currentRows,
+  deleteIndexes,
+  newRows
+}) {
+  const indexes = new Set(deleteIndexes);
+  const preservedRows = currentRows.filter((row, index) => !indexes.has(index));
+  const finalRows = [...preservedRows, ...newRows];
+  const requiredRowCount = Math.max(currentRows.length, finalRows.length);
+  const requests = [];
+
+  if (requiredRowCount > gridRowCount) {
+    requests.push({
+      appendDimension: {
+        sheetId,
+        dimension: 'ROWS',
+        length: requiredRowCount - gridRowCount
+      }
+    });
+  }
+
+  requests.push({
+    updateCells: {
+      range: {
+        sheetId,
+        startRowIndex: 0,
+        endRowIndex: requiredRowCount,
+        startColumnIndex: 0,
+        endColumnIndex: columnCount
+      },
+      rows: [
+        ...preservedRows.map((row) => ({
+          values: row.map((value, columnIndex) => cellData(value, columnIndex, { allowFormula: true }))
+        })),
+        ...newRows.map((row) => ({
+          values: row.map((value, columnIndex) => cellData(value, columnIndex))
+        }))
+      ],
+      fields: 'userEnteredValue'
     }
-  }];
+  });
+
+  if (finalRows.length > 1) {
+    requests.push({
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: 1,
+          endRowIndex: finalRows.length,
+          startColumnIndex: 0,
+          endColumnIndex: 1
+        },
+        cell: {
+          userEnteredFormat: {
+            numberFormat: { type: 'DATE', pattern: 'dd/MM/yyyy' }
+          }
+        },
+        fields: 'userEnteredFormat.numberFormat'
+      }
+    });
+  }
+
+  return requests;
 }
 
 function atomicReplacementRequests({
-  productSheetId,
-  vendorSheetId,
+  productSheet,
+  vendorSheet,
+  currentProductRows,
+  currentVendorRows,
   productDeleteIndexes,
   vendorDeleteIndexes,
   productValues,
   vendorValues
 }) {
   return [
-    ...deleteRequestsForIndexes(productSheetId, productDeleteIndexes),
-    ...deleteRequestsForIndexes(vendorSheetId, vendorDeleteIndexes),
-    ...appendCellsRequest(productSheetId, productValues),
-    ...appendCellsRequest(vendorSheetId, vendorValues)
+    ...replacementRequests({
+      sheetId: productSheet.sheetId,
+      gridRowCount: productSheet.gridProperties.rowCount,
+      columnCount: 11,
+      currentRows: currentProductRows,
+      deleteIndexes: productDeleteIndexes,
+      newRows: productValues
+    }),
+    ...replacementRequests({
+      sheetId: vendorSheet.sheetId,
+      gridRowCount: vendorSheet.gridProperties.rowCount,
+      columnCount: 12,
+      currentRows: currentVendorRows,
+      deleteIndexes: vendorDeleteIndexes,
+      newRows: vendorValues
+    })
   ];
 }
 
@@ -845,9 +876,12 @@ async function run() {
   const accessToken = await getGoogleAccessToken();
   const sheets = new SheetsClient({ spreadsheetId, accessToken });
   const lookups = await loadLookups(sheets);
-  const sheetIds = await sheets.getSheetIdByTitle();
+  const spreadsheet = await sheets.getSpreadsheet();
+  const sheetsByTitle = Object.fromEntries(
+    (spreadsheet.sheets || []).map((sheet) => [sheet.properties.title, sheet.properties])
+  );
 
-  if (sheetIds[VENDOR_SHEET] == null || sheetIds[PRODUCT_SHEET] == null) {
+  if (!sheetsByTitle[VENDOR_SHEET] || !sheetsByTitle[PRODUCT_SHEET]) {
     throw new Error(`Abas obrigatorias nao encontradas: ${VENDOR_SHEET}, ${PRODUCT_SHEET}`);
   }
 
@@ -857,10 +891,13 @@ async function run() {
 
   secureLog(`Linhas novas: ${PRODUCT_SHEET}=${productValues.length}; ${VENDOR_SHEET}=${vendorValues.length}`);
 
-  const [currentProductRows, currentVendorRows] = await Promise.all([
-    sheets.getValues(`${PRODUCT_SHEET}!A:K`),
-    sheets.getValues(`${VENDOR_SHEET}!A:L`)
-  ]);
+  const [currentProductRows, currentVendorRows] = await sheets.getValuesBatch(
+    [`${PRODUCT_SHEET}!A:K`, `${VENDOR_SHEET}!A:L`],
+    {
+      valueRenderOption: 'FORMULA',
+      dateTimeRenderOption: 'SERIAL_NUMBER'
+    }
+  );
 
   const startKey = dateKey(startDate);
   const endKey = dateKey(endDate);
@@ -880,19 +917,21 @@ async function run() {
   secureLog(`Linhas a remover: ${PRODUCT_SHEET}=${productDeleteIndexes.length}; ${VENDOR_SHEET}=${vendorDeleteIndexes.length}`);
 
   const requests = atomicReplacementRequests({
-    productSheetId: sheetIds[PRODUCT_SHEET],
-    vendorSheetId: sheetIds[VENDOR_SHEET],
+    productSheet: sheetsByTitle[PRODUCT_SHEET],
+    vendorSheet: sheetsByTitle[VENDOR_SHEET],
+    currentProductRows,
+    currentVendorRows,
     productDeleteIndexes,
     vendorDeleteIndexes,
     productValues,
     vendorValues
   });
   secureLog(`Aplicando lote atomico no Google Sheets: requests=${requests.length}`);
-  await sheets.batchUpdate(requests);
+  await sheets.batchUpdate(requests, { idempotent: true });
 
-  const [updatedProductRows, updatedVendorRows] = await Promise.all([
-    sheets.getValues(`${PRODUCT_SHEET}!A:K`),
-    sheets.getValues(`${VENDOR_SHEET}!A:L`)
+  const [updatedProductRows, updatedVendorRows] = await sheets.getValuesBatch([
+    `${PRODUCT_SHEET}!A:K`,
+    `${VENDOR_SHEET}!A:L`
   ]);
   const productWindowCount = countRowsForWindow(updatedProductRows, {
     startKey,
@@ -929,8 +968,8 @@ module.exports = run;
 module.exports._internals = {
   atomicReplacementRequests,
   cellData,
-  deleteRequestsForIndexes,
-  googleDateSerial
+  googleDateSerial,
+  replacementRequests
 };
 
 if (require.main === module) {

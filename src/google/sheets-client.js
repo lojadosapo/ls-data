@@ -26,7 +26,7 @@ class SheetsClient {
     });
   }
 
-  async request(config, { maxAttempts = 4 } = {}) {
+  async request(config, { maxAttempts = 4, operation = config.url } = {}) {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         return await this.http.request(config);
@@ -42,7 +42,8 @@ class SheetsClient {
         }
 
         throw new Error(
-          `Google Sheets API falhou: status=${status || 'network'} code=${error.code || 'unknown'}`
+          `Google Sheets API falhou em ${operation}: ` +
+          `status=${status || 'network'} code=${error.code || 'unknown'}`
         );
       }
     }
@@ -82,7 +83,30 @@ class SheetsClient {
     return response.data.values || [];
   }
 
-  async batchUpdate(requests) {
+  async getValuesBatch(ranges, {
+    valueRenderOption = 'FORMATTED_VALUE',
+    dateTimeRenderOption = 'FORMATTED_STRING'
+  } = {}) {
+    const params = new URLSearchParams({
+      valueRenderOption,
+      dateTimeRenderOption
+    });
+    for (const range of ranges) params.append('ranges', range);
+
+    const response = await this.request(
+      {
+        method: 'get',
+        url: '/values:batchGet',
+        params
+      },
+      {
+        operation: `batchGet(${ranges.join(', ')})`
+      }
+    );
+    return (response.data.valueRanges || []).map((item) => item.values || []);
+  }
+
+  async batchUpdate(requests, { idempotent = false } = {}) {
     if (!requests.length) return { skipped: true };
     const response = await this.request(
       {
@@ -92,9 +116,9 @@ class SheetsClient {
         data: { requests }
       },
       {
-        // A timeout can happen after Google has applied this mutation.
-        // Retrying stale row indexes could delete unrelated rows.
-        maxAttempts: 1
+        // Only absolute-value rewrites are safe to retry after an ambiguous timeout.
+        maxAttempts: idempotent ? 2 : 1,
+        operation: 'spreadsheets.batchUpdate'
       }
     );
     return response.data;
