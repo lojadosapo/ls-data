@@ -26,19 +26,24 @@ class SheetsClient {
     });
   }
 
-  async request(config) {
-    for (let attempt = 0; attempt < 4; attempt++) {
+  async request(config, { maxAttempts = 4 } = {}) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         return await this.http.request(config);
       } catch (error) {
         const status = error.response?.status;
-        const retryable = status === 429 || status >= 500 || ['ECONNRESET', 'ETIMEDOUT'].includes(error.code);
-        if (retryable && attempt < 3) {
+        const retryable =
+          status === 429 ||
+          status >= 500 ||
+          ['ECONNABORTED', 'ECONNRESET', 'ETIMEDOUT'].includes(error.code);
+        if (retryable && attempt < maxAttempts - 1) {
           await sleep((attempt + 1) * 2000);
           continue;
         }
 
-        throw new Error(`Google Sheets API falhou: status=${status || 'network'}`);
+        throw new Error(
+          `Google Sheets API falhou: status=${status || 'network'} code=${error.code || 'unknown'}`
+        );
       }
     }
 
@@ -79,11 +84,19 @@ class SheetsClient {
 
   async batchUpdate(requests) {
     if (!requests.length) return { skipped: true };
-    const response = await this.request({
-      method: 'post',
-      url: ':batchUpdate',
-      data: { requests }
-    });
+    const response = await this.request(
+      {
+        method: 'post',
+        url: ':batchUpdate',
+        timeout: 240000,
+        data: { requests }
+      },
+      {
+        // A timeout can happen after Google has applied this mutation.
+        // Retrying stale row indexes could delete unrelated rows.
+        maxAttempts: 1
+      }
+    );
     return response.data;
   }
 

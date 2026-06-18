@@ -18,11 +18,6 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function sanitize(value) {
-  if (typeof value !== 'string') return value;
-  return ['=', '+', '-', '@'].some((char) => value.startsWith(char)) ? `'${value}` : value;
-}
-
 function normalizeText(value) {
   return String(value || '').normalize('NFC').trim().toLocaleLowerCase('pt-BR');
 }
@@ -645,16 +640,16 @@ function prepareFinalRows(productRows, serviceRows, vendorRows, lookups) {
     .sort((a, b) => `${a.dateKey}|${a.company}|${a.finalInvoice}|${a.description}`.localeCompare(`${b.dateKey}|${b.company}|${b.finalInvoice}|${b.description}`, 'pt-BR'))
     .map((row) => [
       formatDateBR(row.date),
-      sanitize(row.company),
+      row.company,
       row.finalInvoice,
-      sanitize(row.description),
-      sanitize(row.vendor),
+      row.description,
+      row.vendor,
       row.amount,
       assistanceByDoc.get(`${normalizeText(row.company)}|${row.finalInvoice}`) || 'Não',
-      sanitize(row.productType),
-      sanitize(row.category),
-      sanitize(row.device),
-      sanitize(lookups.accessByVendor.get(normalizeText(row.vendor))?.[1] || '#N/A')
+      row.productType,
+      row.category,
+      row.device,
+      lookups.accessByVendor.get(normalizeText(row.vendor))?.[1] || '#N/A'
     ]);
 
   const vendorValues = vendorRows
@@ -664,17 +659,17 @@ function prepareFinalRows(productRows, serviceRows, vendorRows, lookups) {
       const category = sector.includes('Comercial - Sede') ? 'comercial' : 'unidades';
       return [
         formatDateBR(row.date),
-        sanitize(row.document),
-        sanitize(row.vendor),
-        sanitize(row.client),
+        row.document,
+        row.vendor,
+        row.client,
         row.amount,
-        sanitize(row.type),
-        sanitize(row.company),
+        row.type,
+        row.company,
         row.documentNumber,
         assistanceByDoc.get(`${normalizeText(row.company)}|${row.documentNumber}`) || 'Não',
-        sanitize(sector),
+        sector,
         category,
-        sanitize(lookups.accessByVendor.get(normalizeText(row.vendor))?.[1] || '#N/A')
+        lookups.accessByVendor.get(normalizeText(row.vendor))?.[1] || '#N/A'
       ];
     });
 
@@ -737,6 +732,67 @@ function deleteRequestsForIndexes(sheetId, indexes) {
   return requests;
 }
 
+function googleDateSerial(value) {
+  const match = String(value || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return null;
+  const timestamp = Date.UTC(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+  return timestamp / 86400000 + 25569;
+}
+
+function cellData(value, columnIndex) {
+  if (columnIndex === 0) {
+    const serial = googleDateSerial(value);
+    if (serial != null) {
+      return {
+        userEnteredValue: { numberValue: serial },
+        userEnteredFormat: {
+          numberFormat: { type: 'DATE', pattern: 'dd/MM/yyyy' }
+        }
+      };
+    }
+  }
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return { userEnteredValue: { numberValue: value } };
+  }
+  if (typeof value === 'boolean') {
+    return { userEnteredValue: { boolValue: value } };
+  }
+  if (value == null) {
+    return {};
+  }
+  return { userEnteredValue: { stringValue: String(value) } };
+}
+
+function appendCellsRequest(sheetId, values) {
+  if (!values.length) return [];
+  return [{
+    appendCells: {
+      sheetId,
+      rows: values.map((row) => ({
+        values: row.map((value, columnIndex) => cellData(value, columnIndex))
+      })),
+      fields: 'userEnteredValue,userEnteredFormat.numberFormat'
+    }
+  }];
+}
+
+function atomicReplacementRequests({
+  productSheetId,
+  vendorSheetId,
+  productDeleteIndexes,
+  vendorDeleteIndexes,
+  productValues,
+  vendorValues
+}) {
+  return [
+    ...deleteRequestsForIndexes(productSheetId, productDeleteIndexes),
+    ...deleteRequestsForIndexes(vendorSheetId, vendorDeleteIndexes),
+    ...appendCellsRequest(productSheetId, productValues),
+    ...appendCellsRequest(vendorSheetId, vendorValues)
+  ];
+}
+
 async function buildRowsForWindow(accounts, startDate, endDate) {
   const contexts = [];
   for (const account of accounts) {
@@ -777,7 +833,7 @@ async function run() {
   const spreadsheetId = process.env.OMIE_SHEETS_SPREADSHEET_ID;
   if (!spreadsheetId) throw new Error('Identificador do Google Sheets ausente');
   const today = todayInSaoPaulo();
-  const endDate = addDays(today, -1);
+  const endDate = today;
   const startDate = addDays(endDate, -(days - 1));
 
   const accounts = parseAccountsFromEnv();
@@ -823,25 +879,20 @@ async function run() {
 
   secureLog(`Linhas a remover: ${PRODUCT_SHEET}=${productDeleteIndexes.length}; ${VENDOR_SHEET}=${vendorDeleteIndexes.length}`);
 
-  const deleteRequests = [
-    ...deleteRequestsForIndexes(sheetIds[PRODUCT_SHEET], productDeleteIndexes),
-    ...deleteRequestsForIndexes(sheetIds[VENDOR_SHEET], vendorDeleteIndexes)
-  ];
-  await sheets.batchUpdate(deleteRequests);
-  await sheets.appendValues(`${PRODUCT_SHEET}!A:K`, productValues);
-  await sheets.appendValues(`${VENDOR_SHEET}!A:L`, vendorValues);
+  const requests = atomicReplacementRequests({
+    productSheetId: sheetIds[PRODUCT_SHEET],
+    vendorSheetId: sheetIds[VENDOR_SHEET],
+    productDeleteIndexes,
+    vendorDeleteIndexes,
+    productValues,
+    vendorValues
+  });
+  secureLog(`Aplicando lote atomico no Google Sheets: requests=${requests.length}`);
+  await sheets.batchUpdate(requests);
 
-  const updatedSpreadsheet = await sheets.getSpreadsheet();
-  const updatedProperties = Object.fromEntries(
-    (updatedSpreadsheet.sheets || []).map((sheet) => [sheet.properties.title, sheet.properties])
-  );
-  const productEndRow = updatedProperties[PRODUCT_SHEET].gridProperties.rowCount;
-  const vendorEndRow = updatedProperties[VENDOR_SHEET].gridProperties.rowCount;
-  const productStartRow = Math.max(2, productEndRow - productValues.length - 100);
-  const vendorStartRow = Math.max(2, vendorEndRow - vendorValues.length - 100);
   const [updatedProductRows, updatedVendorRows] = await Promise.all([
-    sheets.getValues(`${PRODUCT_SHEET}!A${productStartRow}:K${productEndRow}`),
-    sheets.getValues(`${VENDOR_SHEET}!A${vendorStartRow}:L${vendorEndRow}`)
+    sheets.getValues(`${PRODUCT_SHEET}!A:K`),
+    sheets.getValues(`${VENDOR_SHEET}!A:L`)
   ]);
   const productWindowCount = countRowsForWindow(updatedProductRows, {
     startKey,
@@ -875,6 +926,12 @@ async function run() {
 }
 
 module.exports = run;
+module.exports._internals = {
+  atomicReplacementRequests,
+  cellData,
+  deleteRequestsForIndexes,
+  googleDateSerial
+};
 
 if (require.main === module) {
   run().catch((err) => {
