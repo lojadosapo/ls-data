@@ -38,6 +38,15 @@ Sincroniza dados de **Finanças** (Contas a Receber).
 
 **Dados retornados:** Payload completo e bruto da API Omie, incluindo todos os campos disponíveis de contas a receber, clientes, documentos, etc.
 
+### omie-sheets-sync.js
+Atualiza diretamente a planilha de faturamento no Google Sheets.
+
+**Janela:** ultimos 7 dias fechados por padrao (`OMIE_SHEETS_DAYS`), terminando em ontem no horario de Sao Paulo.
+
+**Regra de atualizacao:** remove das abas `Vendedor` e `Produtos e Servicos` as linhas da janela para as empresas Omie configuradas e insere novamente o bloco tratado. Isso evita duplicidade entre produtos, servicos, cupons/NFC-e, NF-e e parcelas financeiras.
+
+**Execucao:** o workflow `omie-sheets-sync.yml` roda quatro vezes ao dia. Os logs publicos mostram apenas datas, contagens e estado da execucao; respostas brutas, clientes, documentos e credenciais nao sao registrados.
+
 ## Configuração
 
 Adicione as seguintes variáveis de ambiente no arquivo `.env`:

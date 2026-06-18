@@ -42,8 +42,9 @@ async function run() {
         pagina,
         registros_por_pagina: registrosPorPagina,
         apenas_importado_api: 'N',
-        filtrar_por_data_de: formatDate(dataInicial),
-        filtrar_por_data_ate: formatDate(dataFinal)
+        ordenar_por: 'DATA_EMISSAO',
+        filtrar_por_emissao_de: formatDate(dataInicial),
+        filtrar_por_emissao_ate: formatDate(dataFinal)
       };
 
       const response = await callOmieAPI('/financas/contareceber/', 'ListarContasReceber', [params]);

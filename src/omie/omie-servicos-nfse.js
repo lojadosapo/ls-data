@@ -42,15 +42,15 @@ async function run() {
         pagina,
         registros_por_pagina: registrosPorPagina,
         apenas_importado_api: 'N',
-        filtrar_por_data_tipo: 'emissao',
-        filtrar_por_data_de: formatDate(dataInicial),
-        filtrar_por_data_ate: formatDate(dataFinal)
+        filtrar_por_data_faturamento_de: formatDate(dataInicial),
+        filtrar_por_data_faturamento_ate: formatDate(dataFinal),
+        filtrar_por_status: 'F'
       };
 
       const response = await callOmieAPI('/servicos/os/', 'ListarOS', [params]);
 
-      if (response.osLista) {
-        for (const os of response.osLista) {
+      if (response.osCadastro) {
+        for (const os of response.osCadastro) {
           allRecords.push({
             external_id: `servicos-nfse-${os.Cabecalho?.nCodOS || os.nCodOS}`,
             payload: os
