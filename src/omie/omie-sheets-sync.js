@@ -357,6 +357,22 @@ function collapseProductRows(rows) {
   return [...grouped.values()].map((row) => ({ ...row, amount: cleanNumber(row.amount) }));
 }
 
+function buildVendorRowFromAccount(ctx, conta, client, startDate) {
+  const rowDate = parseOmieDate(conta.data_emissao) || startDate;
+  const document = conta.numero_documento_fiscal || conta.numero_documento;
+  return {
+    date: rowDate,
+    dateKey: dateKey(rowDate),
+    document: documentDisplay(document),
+    documentNumber: financialDocumentNumber(document),
+    vendor: getVendorName(ctx, conta.codigo_vendedor),
+    client,
+    amount: cleanNumber(conta.valor_documento),
+    type: '1. Contas a Receber',
+    company: ctx.companyName
+  };
+}
+
 async function fetchAccountWindowRows(ctx, startDate, endDate) {
   const dataStart = formatDateBR(startDate);
   const dataEnd = formatDateBR(endDate);
@@ -462,10 +478,8 @@ async function fetchAccountWindowRows(ctx, startDate, endDate) {
     }
   }
 
-  const osById = new Map();
   for (const ordem of ordens) {
     const osCode = Number(ordem.Cabecalho?.nCodOS);
-    if (Number.isFinite(osCode)) osById.set(osCode, ordem);
     const conta = financeByOs.get(osCode);
     const serviceDate = parseOmieDate(ordem.InfoCadastro?.dDtFat) || startDate;
     const vendor = getVendorName(ctx, ordem.Cabecalho?.nCodVend);
@@ -502,45 +516,12 @@ async function fetchAccountWindowRows(ctx, startDate, endDate) {
     const docRoot = documentRoot(conta.numero_documento_fiscal || conta.numero_documento);
     if (canceledCouponDocs.has(docRoot)) continue;
 
-    if (conta.nCodOS != null && osById.has(Number(conta.nCodOS))) {
-      const ordem = osById.get(Number(conta.nCodOS));
-      const grouped = new Map();
-      for (const servico of ordem.ServicosPrestados || []) {
-        const groupKey = servico.cCodCategItem || 'N/D';
-        const quantity = toNumber(servico.nQtde || 1);
-        const unit = toNumber(servico.nValUnit);
-        const discount = toNumber(servico.nValorDesconto);
-        const additions = toNumber(servico.nValorAcrescimos);
-        grouped.set(groupKey, (grouped.get(groupKey) || 0) + quantity * unit + additions - discount);
-      }
-
-      for (const amount of [...grouped.values()].sort((a, b) => a - b)) {
-        vendorRows.push({
-          date: parseOmieDate(conta.data_emissao) || startDate,
-          dateKey: dateKey(parseOmieDate(conta.data_emissao) || startDate),
-          document: documentDisplay(conta.numero_documento_fiscal),
-          documentNumber: financialDocumentNumber(conta.numero_documento_fiscal),
-          vendor: getVendorName(ctx, conta.codigo_vendedor),
-          client: await getClientName(ctx, conta.codigo_cliente_fornecedor),
-          amount: cleanNumber(amount),
-          type: '1. Contas a Receber',
-          company: ctx.companyName
-        });
-      }
-      continue;
-    }
-
-    vendorRows.push({
-      date: parseOmieDate(conta.data_emissao) || startDate,
-      dateKey: dateKey(parseOmieDate(conta.data_emissao) || startDate),
-      document: documentDisplay(conta.numero_documento_fiscal || conta.numero_documento),
-      documentNumber: financialDocumentNumber(conta.numero_documento_fiscal || conta.numero_documento),
-      vendor: getVendorName(ctx, conta.codigo_vendedor),
-      client: await getClientName(ctx, conta.codigo_cliente_fornecedor),
-      amount: cleanNumber(conta.valor_documento),
-      type: '1. Contas a Receber',
-      company: ctx.companyName
-    });
+    vendorRows.push(buildVendorRowFromAccount(
+      ctx,
+      conta,
+      await getClientName(ctx, conta.codigo_cliente_fornecedor),
+      startDate
+    ));
   }
 
   return {
@@ -936,6 +917,7 @@ async function run() {
 module.exports = run;
 module.exports._internals = {
   atomicReplacementRequests,
+  buildVendorRowFromAccount,
   cellData,
   googleDateSerial,
   replacementRequests
