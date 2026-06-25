@@ -11,7 +11,16 @@ function formatZohoDay(date) {
 async function runZohoServiceOrderSync({ days, label }) {
 	console.log(`[raw_events_ordem_de_servico] Sincronizando ordens de serviço (${label})...`);
 
-	const { ZOHO_ACCOUNT_OWNER, ZOHO_APP_NAME, ZOHO_SERVICE_ORDER_REPORT_NAME } = process.env;
+	const {
+		ZOHO_ACCOUNT_OWNER,
+		ZOHO_APP_NAME,
+		ZOHO_LEADS_APP_NAME,
+		ZOHO_SERVICE_ORDER_REPORT_NAME
+	} = process.env;
+	const zohoAppName = ZOHO_APP_NAME || ZOHO_LEADS_APP_NAME;
+	if (!ZOHO_ACCOUNT_OWNER || !zohoAppName || !ZOHO_SERVICE_ORDER_REPORT_NAME) {
+		throw new Error('Variáveis Zoho ausentes: ZOHO_ACCOUNT_OWNER, ZOHO_APP_NAME/ZOHO_LEADS_APP_NAME e ZOHO_SERVICE_ORDER_REPORT_NAME são obrigatórias');
+	}
 	const zohoToken = await getZohoToken();
 
 	const today = new Date();
@@ -27,7 +36,7 @@ async function runZohoServiceOrderSync({ days, label }) {
 
 		while (true) {
 			const criteria = `(dh_inicio_da_ordem_de_servico >= "${formattedDate} 00:00:00" && dh_inicio_da_ordem_de_servico <= "${formattedDate} 23:59:59")`;
-			const url = `https://creator.zoho.com/api/v2/${ZOHO_ACCOUNT_OWNER}/${ZOHO_APP_NAME}/report/${ZOHO_SERVICE_ORDER_REPORT_NAME}`;
+			const url = `https://creator.zoho.com/api/v2/${ZOHO_ACCOUNT_OWNER}/${zohoAppName}/report/${ZOHO_SERVICE_ORDER_REPORT_NAME}`;
 
 			let resp;
 			try {

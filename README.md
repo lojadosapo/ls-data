@@ -260,6 +260,7 @@ Use `.env.example` como referência local. Em produção, os mesmos nomes devem 
 | `ZOHO_REFRESH_TOKEN` | refresh token |
 | `ZOHO_ACCOUNT_OWNER` | owner da conta/app no Zoho Creator |
 | `ZOHO_APP_NAME` | app usado na integração de ordens de serviço |
+| `ZOHO_LEADS_APP_NAME` | alias legado aceito como fallback para `ZOHO_APP_NAME` |
 | `ZOHO_SERVICE_ORDER_REPORT_NAME` | report de ordens de serviço |
 
 ### Omie

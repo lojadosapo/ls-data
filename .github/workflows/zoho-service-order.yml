@@ -38,7 +38,7 @@ jobs:
         with:
           node-version: 20
       - run: npm install
-      - run: node src/zoho/zoho-leads.js
+      - run: node src/zoho/zoho-service-order.js
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -47,4 +47,5 @@ jobs:
           ZOHO_REFRESH_TOKEN: ${{ secrets.ZOHO_REFRESH_TOKEN }}
           ZOHO_ACCOUNT_OWNER: ${{ secrets.ZOHO_ACCOUNT_OWNER }}
           ZOHO_APP_NAME: ${{ secrets.ZOHO_APP_NAME }}
+          ZOHO_LEADS_APP_NAME: ${{ secrets.ZOHO_LEADS_APP_NAME }}
           ZOHO_SERVICE_ORDER_REPORT_NAME: ${{ secrets.ZOHO_SERVICE_ORDER_REPORT_NAME }}
