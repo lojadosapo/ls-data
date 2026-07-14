@@ -100,6 +100,8 @@ sequenceDiagram
 
 Uma escrita que perdeu a resposta por timeout não é repetida cegamente. O código consulta primeiro o estado final para distinguir “não aplicado” de “aplicado com resposta perdida”.
 
+Strings são enviadas como texto literal, sem adicionar apóstrofo ao conteúdo e sem executar fórmulas. Datas do Hablla e do Omie continuam sendo células numéricas com formato `DATE`/`DATE_TIME`, preservando filtros, fórmulas e Apps Script que esperam datas reais.
+
 ## Paginação otimizada do Hablla
 
 Cards são pedidos em páginas de 50, ordenados por `updated_at` decrescente. A janela de negócio continua sendo determinada por `created_at`.

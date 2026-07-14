@@ -57,6 +57,14 @@ function parseBrazilianDateKey(value) {
   return `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
 }
 
+function shouldReplaceCardRow(row, cardIds, cutoffDay) {
+  const createdDay = parseBrazilianDateKey(row[1]);
+  return (
+    cardIds.has(String(row[14] || "")) ||
+    Boolean(createdDay && createdDay >= cutoffDay)
+  );
+}
+
 function uniqueAttendantRows(rows) {
   const value = (row, index) => String(row[index] || "").trim();
   const byKey = new Map();
@@ -164,8 +172,8 @@ async function run() {
           ? card.user.id || ""
           : card.user || "";
       return [
-        formatBrazilianDateTime(card.updated_at),
-        formatBrazilianDateTime(card.created_at),
+        GoogleSheets.dateTimeCell(formatBrazilianDateTime(card.updated_at)),
+        GoogleSheets.dateTimeCell(formatBrazilianDateTime(card.created_at)),
         card.workspace || "",
         card.board || "",
         card.list || "",
@@ -177,7 +185,7 @@ async function run() {
         card.source || "",
         card.status || "",
         userId,
-        formatBrazilianDateTime(card.finished_at),
+        GoogleSheets.dateTimeCell(formatBrazilianDateTime(card.finished_at)),
         card.id,
         collaboratorNames[userId] || "",
         customFields[3],
@@ -192,14 +200,9 @@ async function run() {
       columnRange: "A:R",
       header: CARD_HEADERS,
       newRows: cardRows,
-      matchColumnIndexes: [0, 14],
-      shouldReplace: (row) => {
-        const rowDate = parseBrazilianDateKey(row[0]);
-        return (
-          cardIds.has(String(row[14] || "")) ||
-          (rowDate && rowDate >= sevenDays.day)
-        );
-      },
+      matchColumnIndexes: [1, 14],
+      shouldReplace: (row) =>
+        shouldReplaceCardRow(row, cardIds, sevenDays.day),
     });
     log(`${cardResult.removed} cards substituidos por ${cardResult.inserted}.`);
 
@@ -217,7 +220,7 @@ async function run() {
         const sector = item.sector || {};
         const connection = item.connection || {};
         return [
-          yesterday.label,
+          GoogleSheets.dateCell(yesterday.label),
           HABLLA_WORKSPACE_ID,
           sector.id || "",
           sector.name || "",
@@ -261,4 +264,5 @@ async function run() {
 
 module.exports = run;
 module.exports.uniqueAttendantRows = uniqueAttendantRows;
+module.exports._internals = { shouldReplaceCardRow };
 if (require.main === module) run();

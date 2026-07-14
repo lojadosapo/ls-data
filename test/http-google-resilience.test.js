@@ -287,9 +287,12 @@ test("replaceRows relê seletoras, exclui de baixo para cima e valida linhas com
     "'Base Dados'!A:A",
     "'Base Dados'!D:D",
   ]);
-  assert.equal(harness.selectorReads.length, 3);
+  assert.equal(harness.selectorReads.length, 4);
   assert.deepEqual(harness.update.options, { idempotent: false });
-  assert.deepEqual(harness.fullReads, [["'Base Dados'!A4:D4"]]);
+  assert.deepEqual(harness.fullReads, [
+    ["'Base Dados'!A4:D4"],
+    ["'Base Dados'!A4:D4"],
+  ]);
 
   const deletions = harness.update.requests
     .filter((request) => request.deleteDimension)
