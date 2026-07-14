@@ -113,17 +113,18 @@ flowchart TD
     B -- sim --> C{Página repetida?}
     C -- sim --> X
     C -- não --> D[Deduplicar por ID]
-    D --> E{updated_at segue decrescente?}
-    E -- não --> F[Desativar early-stop]
-    E -- sim --> G{Página inteira anterior ao corte?}
-    G -- sim --> H[Encerrar]
-    G -- não --> I{Página curta ou vazia?}
-    F --> I
-    I -- sim --> H
+    D --> E{Há created_at dentro da janela?}
+    E -- sim --> F[Zerar contador sem recentes]
+    E -- não --> G[Incrementar contador]
+    F --> I{Página curta ou vazia?}
+    G --> H{Duas páginas consecutivas?}
+    H -- sim --> J[Encerrar]
+    H -- não --> I
+    I -- sim --> J
     I -- não --> A
 ```
 
-O worker histórico encerrava depois de **duas páginas consecutivas** sem card criado no prazo. O coletor atual preserva a mesma janela por `created_at`, mas usa a ordenação observada para encerrar com segurança na primeira página comprovadamente antiga. Se houver inversão, ele abandona o atalho e continua até o fim ou até o teto configurado.
+O coletor preserva o comportamento histórico: encerra depois de **duas páginas consecutivas** sem card criado no prazo e zera o contador quando encontra uma criação recente. `updated_at` pagina a API; somente `created_at` decide quais cards pertencem à janela. IDs, datas, páginas repetidas e o teto total continuam validados antes de qualquer escrita.
 
 ## Resiliência
 
@@ -214,6 +215,7 @@ npm test
 | `OMIE_SHEETS_DAYS` | `7` | Janela recalculada no Sheets. |
 | `HABLLA_CARDS_DAYS` | `7` | Janela recente de cards. |
 | `HABLLA_CARDS_MAX_PAGES` | `2000` | Teto seguro da paginação. |
+| `HABLLA_CARDS_PAGES_WITHOUT_RECENT_CREATED` | `2` | Páginas consecutivas sem criação recente antes do encerramento. |
 | `HABLLA_MIN_INTERVAL_MS` | `500` | Ritmo mínimo das chamadas Hablla. |
 | `HABLLA_REQUEST_TIMEOUT_MS` | `60000` | Timeout HTTP do Hablla. |
 | `HABLLA_MAX_ATTEMPTS` | `5` | Tentativas transitórias no Hablla. |
