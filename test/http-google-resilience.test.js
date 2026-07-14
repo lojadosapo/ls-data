@@ -207,6 +207,9 @@ function attachReplaceRowsSheet(
   let writeCalls = 0;
 
   sheets.getValuesBatch = async (ranges, options = {}) => {
+    if (options.valueRenderOption === "FORMULA") {
+      return [[header, ...state.rows.map((row) => [...row])]];
+    }
     if (options.valueRenderOption === "UNFORMATTED_VALUE") {
       fullReads.push(ranges);
       return ranges.map((range) => {
@@ -230,7 +233,12 @@ function attachReplaceRowsSheet(
       ]),
     ];
   };
-  sheets.getSheetIdByTitle = async () => ({ "Base Dados": 321 });
+  sheets.getSheetPropertiesByTitle = async () => ({
+    "Base Dados": {
+      sheetId: 321,
+      gridProperties: { rowCount: 1_000, columnCount: header.length },
+    },
+  });
   sheets.batchUpdate = async (requests, options) => {
     writeCalls++;
     update = { requests, options };
@@ -287,12 +295,9 @@ test("replaceRows relê seletoras, exclui de baixo para cima e valida linhas com
     "'Base Dados'!A:A",
     "'Base Dados'!D:D",
   ]);
-  assert.equal(harness.selectorReads.length, 4);
+  assert.equal(harness.selectorReads.length, 3);
   assert.deepEqual(harness.update.options, { idempotent: false });
-  assert.deepEqual(harness.fullReads, [
-    ["'Base Dados'!A4:D4"],
-    ["'Base Dados'!A4:D4"],
-  ]);
+  assert.deepEqual(harness.fullReads, []);
 
   const deletions = harness.update.requests
     .filter((request) => request.deleteDimension)
@@ -304,6 +309,23 @@ test("replaceRows relê seletoras, exclui de baixo para cima e valida linhas com
   assert.equal(
     harness.update.requests.some((request) => request.insertDimension),
     false,
+  );
+  assert.equal(
+    harness.update.requests.some((request) => request.appendCells),
+    false,
+  );
+  assert.deepEqual(
+    harness.update.requests.find(
+      (request) =>
+        request.updateCells?.range?.startRowIndex === 3,
+    ).updateCells.range,
+    {
+      sheetId: 321,
+      startRowIndex: 3,
+      endRowIndex: 4,
+      startColumnIndex: 0,
+      endColumnIndex: 4,
+    },
   );
   assert.deepEqual(result, { previous: 4, removed: 2, inserted: 1, final: 3 });
 });

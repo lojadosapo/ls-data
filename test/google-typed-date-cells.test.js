@@ -80,32 +80,35 @@ test("replaceRows confirma formato antes de aceitar resposta ambigua", async () 
   const typedDateTime = GoogleSheets.dateTimeCell("14/07/2026 07:47:13");
   const newRows = [[typedDateTime, "NOVO"]];
   const formattedBefore = "14/07/2026 06:00:00";
-  let selectorReads = 0;
   const writtenUpdates = [];
   const selectedValues = [];
+  let applied = false;
 
-  sheets.getSheetIdByTitle = async () => ({ Chamadas: 17 });
+  sheets.getSheetPropertiesByTitle = async () => ({
+    Chamadas: {
+      sheetId: 17,
+      gridProperties: { rowCount: 1_000, columnCount: 2 },
+    },
+  });
   sheets.getValuesBatch = async (_ranges, options = {}) => {
+    if (options.valueRenderOption === "FORMULA") {
+      return [[
+        header,
+        [applied ? Number(typedDateTime) : Number(typedDateTime) - 1 / 24, applied ? "NOVO" : "VELHO"],
+      ]];
+    }
     if (options.valueRenderOption === "UNFORMATTED_VALUE") {
       return [[[Number(typedDateTime), "NOVO"]]];
     }
-    selectorReads++;
-    const formatted =
-      selectorReads <= 2
-        ? formattedBefore
-        : selectorReads === 3
-          ? Number(typedDateTime)
-          : String(typedDateTime);
+    const formatted = applied ? String(typedDateTime) : formattedBefore;
     return [[header], [[header[0]], [formatted]]];
   };
   sheets.batchUpdate = async (requests, options) => {
     writtenUpdates.push({ requests, options });
-    if (options.idempotent) {
-      const error = new Error("resposta de formato perdida");
-      error.code = "ECONNRESET";
-      throw error;
-    }
-    return { ok: true };
+    applied = true;
+    const error = new Error("resposta atomica perdida");
+    error.code = "ECONNRESET";
+    throw error;
   };
   sheets.numberFormatsMatch = async (sheetTitle, blocks) => {
     assert.equal(sheetTitle, "Chamadas");
@@ -138,68 +141,74 @@ test("replaceRows confirma formato antes de aceitar resposta ambigua", async () 
 
   assert.deepEqual(result, { previous: 1, removed: 1, inserted: 1, final: 1 });
   assert.ok(selectedValues.includes("14/07/2026 07:47:13"));
-  assert.equal(writtenUpdates.length, 2);
-  const append = writtenUpdates[0].requests.find(
-    (request) => request.appendCells,
-  ).appendCells;
-  assert.equal(append.fields, "userEnteredValue");
+  assert.equal(writtenUpdates.length, 1);
+  assert.deepEqual(writtenUpdates[0].options, { idempotent: false });
+  const write = writtenUpdates[0].requests.find(
+    (request) => request.updateCells?.range?.startRowIndex === 1,
+  ).updateCells;
+  assert.equal(write.fields, "userEnteredValue");
   assert.deepEqual(
-    append.rows[0].values[0],
+    write.rows[0].values[0],
     { userEnteredValue: { numberValue: Number(typedDateTime) } },
   );
-  assert.equal(append.rows[0].values[0].userEnteredFormat, undefined);
-  assert.deepEqual(writtenUpdates[1], {
-    options: { idempotent: true },
-    requests: [
-      {
-        repeatCell: {
-          range: {
-            sheetId: 17,
-            startRowIndex: 1,
-            endRowIndex: 2,
-            startColumnIndex: 0,
-            endColumnIndex: 1,
-          },
-          cell: {
-            userEnteredFormat: {
-              numberFormat: {
-                type: "DATE_TIME",
-                pattern: "dd/mm/yyyy hh:mm:ss",
-              },
+  assert.equal(write.rows[0].values[0].userEnteredFormat, undefined);
+  assert.deepEqual(
+    writtenUpdates[0].requests.find((request) => request.repeatCell),
+    {
+      repeatCell: {
+        range: {
+          sheetId: 17,
+          startRowIndex: 1,
+          endRowIndex: 2,
+          startColumnIndex: 0,
+          endColumnIndex: 1,
+        },
+        cell: {
+          userEnteredFormat: {
+            numberFormat: {
+              type: "DATE_TIME",
+              pattern: "dd/mm/yyyy hh:mm:ss",
             },
           },
-          fields: "userEnteredFormat.numberFormat",
         },
+        fields: "userEnteredFormat.numberFormat",
       },
-    ],
-  });
+    },
+  );
 });
 
 test("replaceRows rejeita resposta ambigua quando o formato nao foi confirmado", async () => {
   const sheets = createSheets();
   const header = ["Data/Hora", "Valor"];
   const typedDateTime = GoogleSheets.dateTimeCell("14/07/2026 07:47:13");
-  let selectorReads = 0;
+  let applied = false;
 
-  sheets.getSheetIdByTitle = async () => ({ Chamadas: 17 });
+  sheets.getSheetPropertiesByTitle = async () => ({
+    Chamadas: {
+      sheetId: 17,
+      gridProperties: { rowCount: 1_000, columnCount: 2 },
+    },
+  });
   sheets.getValuesBatch = async (_ranges, options = {}) => {
+    if (options.valueRenderOption === "FORMULA") {
+      return [[
+        header,
+        [applied ? Number(typedDateTime) : Number(typedDateTime) - 1 / 24, applied ? "NOVO" : "VELHO"],
+      ]];
+    }
     if (options.valueRenderOption === "UNFORMATTED_VALUE") {
       return [[[Number(typedDateTime), "NOVO"]]];
     }
-    selectorReads++;
-    const value =
-      selectorReads < 3
-        ? "14/07/2026 06:00:00"
-        : Number(typedDateTime);
+    const value = applied
+      ? String(typedDateTime)
+      : "14/07/2026 06:00:00";
     return [[header], [[header[0]], [value]]];
   };
-  sheets.batchUpdate = async (_requests, options) => {
-    if (options.idempotent) {
-      const error = new Error("resposta de formato perdida");
-      error.code = "ECONNRESET";
-      throw error;
-    }
-    return { ok: true };
+  sheets.batchUpdate = async () => {
+    applied = true;
+    const error = new Error("resposta atomica perdida");
+    error.code = "ECONNRESET";
+    throw error;
   };
   sheets.numberFormatsMatch = async () => false;
 
@@ -214,7 +223,7 @@ test("replaceRows rejeita resposta ambigua quando o formato nao foi confirmado",
         shouldReplace: (row) =>
           String(row[0] ?? "").startsWith("14/07/2026"),
       }),
-    /resposta de formato perdida/,
+    /resposta atomica perdida/,
   );
 });
 
