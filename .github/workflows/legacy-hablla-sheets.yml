@@ -33,5 +33,5 @@ jobs:
           HABLLA_TOKEN: ${{ secrets.HABLLA_TOKEN }}
           HABLLA_WORKSPACE_ID: ${{ secrets.HABLLA_WORKSPACE_ID }}
           HABLLA_BOARD_ID: ${{ secrets.HABLLA_BOARD_ID }}
-          SPREADSHEET_ID: ${{ secrets.HABLLA_SHEETS_SPREADSHEET_ID }}
+          SPREADSHEET_ID: ${{ secrets.HABLLA_SPREADSHEET_ID }}
           DB_COLABORADOR_ID: ${{ secrets.HABLLA_COLLABORATORS_SPREADSHEET_ID }}
