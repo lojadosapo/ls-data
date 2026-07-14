@@ -3,43 +3,34 @@
  * Uso: node run-local.js [nome-do-script]
  *
  * Exemplos:
- *   node run-local.js                     → roda apenas Omie (padrão)
- *   node run-local.js omie-vendas-nfe     → só um script específico
- *   node run-local.js hablla-attendants   → só hablla attendants
- *   node run-local.js hablla-cards
- *   node run-local.js hablla-clients
- *   node run-local.js service-order
- *   node run-local.js service-order-recent
+ *   node run-local.js                         → roda todo o Omie Supabase
+ *   node run-local.js hablla-cards            → roda um coletor específico
+ *   node run-local.js zoho-service-order
  *   node run-local.js omie-vendas-nfe
- *   node run-local.js omie-servicos-nfse
- *   node run-local.js omie-financas
  */
 
 require('dotenv').config();
+const formatPublicError = require('./src/lib/public-error');
 
 const scripts = {
-  'hablla-attendants': require('./src/hablla/hablla-attendants'),
-  'hablla-cards':   require('./src/hablla/hablla-cards'),
-  'hablla-clients': require('./src/hablla/hablla-clients'),
-  'service-order': require('./src/zoho/zoho-service-order'),
-  'service-order-recent': require('./src/zoho/zoho-service-order-recent'),
-  'omie-vendas-nfe': require('./src/omie/omie-vendas-nfe'),
-  'omie-servicos-nfse': require('./src/omie/omie-servicos-nfse'),
-  'omie-financas': require('./src/omie/omie-financas')
+  omie: require('./src/omie/supabase/run'),
+  'hablla-attendants': require('./src/hablla/supabase/attendants'),
+  'hablla-cards': require('./src/hablla/supabase/cards'),
+  'hablla-clients': require('./src/hablla/supabase/clients'),
+  'zoho-service-order': require('./src/zoho/supabase/service-order'),
+  'zoho-service-order-recent': require('./src/zoho/supabase/service-order-recent'),
+  'omie-vendas-nfe': require('./src/omie/supabase/vendas-nfe'),
+  'omie-servicos-nfse': require('./src/omie/supabase/servicos-nfse'),
+  'omie-financas': require('./src/omie/supabase/financas')
 };
 
 async function main() {
   const args = process.argv.slice(2);
 
   if (args.length === 0) {
-    // Sem argumentos: executa apenas scripts Omie por padrão
-    for (const [name, fn] of Object.entries(scripts)) {
-      if (!name.startsWith('omie-')) continue;
-      console.log(`\n========== ${name} ==========`);
-      const res = await fn();
-      console.log('Retorno (JSON):');
-      console.log(JSON.stringify(res, null, 2));
-    }
+    console.log('\n========== omie ==========');
+    await scripts.omie();
+    console.log('omie concluido.');
   } else {
     for (const arg of args) {
       const fn = scripts[arg];
@@ -48,9 +39,8 @@ async function main() {
         process.exit(1);
       }
       console.log(`\n========== ${arg} ==========`);
-      const res = await fn();
-      console.log('Retorno (JSON):');
-      console.log(JSON.stringify(res, null, 2));
+      await fn();
+      console.log(`${arg} concluido.`);
     }
   }
 
@@ -58,6 +48,6 @@ async function main() {
 }
 
 main().catch(err => {
-  console.error('Erro no runner:', err);
+  console.error('Erro no runner:', formatPublicError(err));
   process.exit(1);
 });

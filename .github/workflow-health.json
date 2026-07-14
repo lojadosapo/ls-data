@@ -1,0 +1,14 @@
+{
+  "company": "Loja do Sapo",
+  "branch": "main",
+  "workflows": [
+    { "file": "sheets-sync.yml", "name": "Sheets Sync", "maxAgeHours": 11 },
+    { "file": "hablla-cards.yml", "name": "Hablla Cards", "maxAgeHours": 10 },
+    { "file": "hablla-clients.yml", "name": "Hablla Clients", "maxAgeHours": 10 },
+    { "file": "hablla-attendants.yml", "name": "Hablla Attendants", "maxAgeHours": 36 },
+    { "file": "zoho-service-order-recent.yml", "name": "Zoho Service Order Recent", "maxAgeHours": 11 },
+    { "file": "zoho-service-order.yml", "name": "Zoho Service Order", "maxAgeHours": 36 },
+    { "file": "omie-supabase.yml", "name": "Omie Supabase", "maxAgeHours": 36 },
+    { "file": "repository-heartbeat.yml", "name": "Repository Heartbeat", "maxAgeHours": 144 }
+  ]
+}
