@@ -751,7 +751,7 @@ function googleDateSerial(value) {
   return timestamp / 86400000 + 25569;
 }
 
-function cellData(value, columnIndex, { allowFormula = false } = {}) {
+function cellData(value, columnIndex) {
   if (columnIndex === 0) {
     const serial = googleDateSerial(value);
     if (serial != null) {
@@ -770,9 +770,6 @@ function cellData(value, columnIndex, { allowFormula = false } = {}) {
   }
   if (value == null) {
     return {};
-  }
-  if (allowFormula && typeof value === "string" && value.startsWith("=")) {
-    return { userEnteredValue: { formulaValue: value } };
   }
   return { userEnteredValue: { stringValue: String(value) } };
 }

@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const {
   appendedRange,
+  cellData,
   indexesOutside,
   orderedRowsFingerprint,
   rowsFingerprint,
@@ -43,4 +44,12 @@ test("precondition Omie detecta reordenacao que invalidaria indices fisicos", ()
 test("faixa de confirmacao aponta somente para as linhas anexadas", () => {
   assert.equal(appendedRange("Aba", 100, 12, 7, "K"), "Aba!A89:K95");
   assert.equal(appendedRange("Aba", 100, 12, 0, "K"), null);
+});
+
+test("Omie preserva texto literal sem apostrofo nem formula", () => {
+  for (const value of ["+5511999999999", "=texto", "-texto", "@texto"]) {
+    assert.deepEqual(cellData(value, 1), {
+      userEnteredValue: { stringValue: value },
+    });
+  }
 });
