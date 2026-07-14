@@ -419,3 +419,11 @@ test("replaceRows detecta exclusão concorrente de linha não alvo após o batch
     /Validacao completa apos escrita falhou/,
   );
 });
+
+test("caracteres de formula permanecem texto literal sem apostrofo", () => {
+  for (const value of ["=SUM(A1:A2)", "+5511999999999", "-texto", "@usuario"]) {
+    assert.deepEqual(GoogleSheets.literalCell(value), {
+      userEnteredValue: { stringValue: value },
+    });
+  }
+});

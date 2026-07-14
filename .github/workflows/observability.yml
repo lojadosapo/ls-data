@@ -7,12 +7,6 @@ on:
   workflow_run:
     workflows:
       - Sheets Sync
-      - Hablla Cards
-      - Hablla Clients
-      - Hablla Attendants
-      - Zoho Service Order Recent
-      - Zoho Service Order
-      - Omie Supabase
       - Repository Heartbeat
     types: [completed]
   workflow_dispatch:

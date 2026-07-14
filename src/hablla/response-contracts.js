@@ -10,10 +10,7 @@ function validateItems(items, dataset) {
   return items;
 }
 
-function extractList(payload, { dataset, keys, allowRootArray = false }) {
-  if (allowRootArray && Array.isArray(payload)) {
-    return validateItems(payload, dataset);
-  }
+function extractList(payload, { dataset, keys }) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new Error(`Hablla retornou ${dataset} em formato inesperado`);
   }
@@ -44,12 +41,4 @@ function extractAttendants(payload) {
   });
 }
 
-function extractClients(payload) {
-  return extractList(payload, {
-    dataset: "clients",
-    keys: ["results", "data", "list"],
-    allowRootArray: true,
-  });
-}
-
-module.exports = { extractAttendants, extractCards, extractClients };
+module.exports = { extractAttendants, extractCards };

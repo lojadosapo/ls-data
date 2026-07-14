@@ -51,15 +51,6 @@ function log(message, isError = false) {
   (isError ? console.error : console.log)(line);
 }
 
-function sanitize(value) {
-  if (typeof value !== "string") return value;
-  return ["=", "+", "-", "@"].some((character) =>
-    value.startsWith(character),
-  )
-    ? `'${value}`
-    : value;
-}
-
 function parseBrazilianDateKey(value) {
   const match = String(value || "").match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if (!match) return null;
@@ -178,19 +169,19 @@ async function run() {
         card.workspace || "",
         card.board || "",
         card.list || "",
-        sanitize(customFields[0]),
-        sanitize(customFields[1]),
-        sanitize(customFields[2]),
-        sanitize(card.name || ""),
-        sanitize(card.description || ""),
+        customFields[0],
+        customFields[1],
+        customFields[2],
+        card.name || "",
+        card.description || "",
         card.source || "",
         card.status || "",
         userId,
         formatBrazilianDateTime(card.finished_at),
         card.id,
-        sanitize(collaboratorNames[userId] || ""),
-        sanitize(customFields[3]),
-        sanitize((card.tags || []).map((tag) => tag.name).join(", ")),
+        collaboratorNames[userId] || "",
+        customFields[3],
+        (card.tags || []).map((tag) => tag.name).join(", "),
       ];
     });
     assertRowWidth(cardRows, CARD_HEADERS.length, "Base Hablla Card");
@@ -229,15 +220,15 @@ async function run() {
           yesterday.label,
           HABLLA_WORKSPACE_ID,
           sector.id || "",
-          sanitize(sector.name || ""),
+          sector.name || "",
           user.id || "",
-          sanitize(collaboratorNames[user.id] || ""),
-          sanitize(user.email || ""),
+          collaboratorNames[user.id] || "",
+          user.email || "",
           item.total_services ?? 0,
           item.tme ?? 0,
           item.tma ?? 0,
           connection.id || "",
-          sanitize(connection.name || ""),
+          connection.name || "",
           connection.type || "",
           item.total_csat ?? 0,
           item.total_csat_greater_4 ?? 0,
