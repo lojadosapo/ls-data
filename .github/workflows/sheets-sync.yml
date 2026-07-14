@@ -1,0 +1,41 @@
+name: Sheets Sync
+
+on:
+  schedule:
+    - cron: "47 8,12,16,20 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: sheets-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Sincronizar planilhas
+        run: node src/google/run-sheets-syncs.js omie/omie-sheets-sync.js hablla/hablla-sheets-sync.js
+        env:
+          REQUIRED_ENV: GOOGLE_CLIENT_EMAIL,GOOGLE_PRIVATE_KEY,OMIE_CREDENTIALS,OMIE_SHEETS_SPREADSHEET_ID,HABLLA_TOKEN,HABLLA_WORKSPACE_ID,HABLLA_BOARD_ID,HABLLA_SPREADSHEET_ID,HABLLA_COLLABORATORS_SPREADSHEET_ID
+          GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
+          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
+          OMIE_CREDENTIALS: ${{ secrets.OMIE_CREDENTIALS }}
+          OMIE_SHEETS_SPREADSHEET_ID: ${{ secrets.OMIE_SHEETS_SPREADSHEET_ID }}
+          OMIE_SHEETS_DAYS: ${{ vars.OMIE_SHEETS_DAYS || '7' }}
+          HABLLA_TOKEN: ${{ secrets.HABLLA_TOKEN }}
+          HABLLA_WORKSPACE_ID: ${{ secrets.HABLLA_WORKSPACE_ID }}
+          HABLLA_BOARD_ID: ${{ secrets.HABLLA_BOARD_ID }}
+          HABLLA_SPREADSHEET_ID: ${{ secrets.HABLLA_SPREADSHEET_ID }}
+          HABLLA_COLLABORATORS_SPREADSHEET_ID: ${{ secrets.HABLLA_COLLABORATORS_SPREADSHEET_ID }}
