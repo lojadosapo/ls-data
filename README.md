@@ -124,7 +124,7 @@ flowchart TD
     I -- não --> A
 ```
 
-O coletor preserva o comportamento histórico: encerra depois de **duas páginas consecutivas** sem card criado no prazo e zera o contador quando encontra uma criação recente. `updated_at` pagina a API; somente `created_at` decide quais cards pertencem à janela. IDs, datas, páginas repetidas e o teto total continuam validados antes de qualquer escrita.
+O modo normal preserva o comportamento histórico: encerra depois de **duas páginas consecutivas** sem card criado no prazo e zera o contador quando encontra uma criação recente. `updated_at` pagina a API; somente `created_at` decide quais cards pertencem à janela. Em uma recuperação controlada, `HABLLA_CARDS_EXHAUSTIVE=true` ignora esse atalho e continua até uma página inteira provar a fronteira de `updated_at`; a ordem global é validada. IDs, datas, páginas repetidas e o teto total continuam validados antes de qualquer escrita. Por padrão, cards não retornados são preservados e cada dia vazio de atendentes é mantido sem remoção. Isso evita perda por leitura parcial, mas também pode conservar um card apagado na origem; desative a preservação somente depois de uma coleta exaustiva validada e uma fotografia do destino.
 
 ## Resiliência
 
@@ -216,6 +216,13 @@ npm test
 | `HABLLA_CARDS_DAYS` | `7` | Janela recente de cards. |
 | `HABLLA_CARDS_MAX_PAGES` | `2000` | Teto seguro da paginação. |
 | `HABLLA_CARDS_PAGES_WITHOUT_RECENT_CREATED` | `2` | Páginas consecutivas sem criação recente antes do encerramento. |
+| `HABLLA_CARDS_EXHAUSTIVE` | `false` | Percorre até uma fronteira temporal comprovada; use somente em recuperação local. |
+| `HABLLA_CARDS_CRAWL_PASSES` | `1` | Leituras completas consolidadas pela versão mais recente de cada ID. |
+| `HABLLA_CARDS_CRAWL_ATTEMPTS` | `1` | Reinícios de uma coleta inconsistente. |
+| `HABLLA_CARDS_PRESERVE_UNFETCHED` | `true` | Não apaga cards ausentes de uma coleta parcial. |
+| `HABLLA_SHEETS_DATASETS` | `cards,attendants` | Permite executar somente um destino em recuperação local. |
+| `HABLLA_SHEETS_ATTENDANTS_DAYS` | `1` | Dias concluídos de atendentes, consultados separadamente. |
+| `HABLLA_SHEETS_ALLOW_EMPTY_REPLACEMENT` | `false` | Override explícito para limpar uma janela vazia. |
 | `HABLLA_MIN_INTERVAL_MS` | `500` | Ritmo mínimo das chamadas Hablla. |
 | `HABLLA_REQUEST_TIMEOUT_MS` | `60000` | Timeout HTTP do Hablla. |
 | `HABLLA_MAX_ATTEMPTS` | `5` | Tentativas transitórias no Hablla. |
