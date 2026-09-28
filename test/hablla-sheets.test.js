@@ -5,10 +5,14 @@ const { uniqueAttendantRows } = require('../src/hablla/sheets/sync');
 const {
   assertEmptyAttendantDaysAreSafe,
   booleanOption,
+  buildCardSheet,
   collectCardSnapshots,
   completedDayRanges,
+  discoverCardHeaders,
   selectedDatasets,
   shouldReplaceCardRow,
+  CARD_HEADERS,
+  PHONE_HEADERS,
 } = require('../src/hablla/sheets/sync')._internals;
 
 function row({ date = '13/07/2026', sector = 'sector', user = 'user', connection = 'connection', total = 1 }) {
@@ -107,4 +111,48 @@ test('coletas repetidas consolidam a versao mais recente por ID', async () => {
 
   assert.equal(cards.length, 2);
   assert.equal(cards.find(({ id }) => id === 'card-1').status, 'novo');
+});
+
+test('telefone vem primeiro entre colunas novas e os campos extras sao descobertos', () => {
+  const cards = [{
+    id: 'card-1',
+    updated_at: '2026-09-28T12:00:00.000Z',
+    created_at: '2026-09-01T12:00:00.000Z',
+    phone: '+5531999998888',
+    custom_fields: [
+      { custom_field: '69e8d49592607a5877e699d5', value: '31988887777' },
+      { custom_field: 'custom-extra-id', value: 'extra-value' },
+    ],
+    source_detail: 'landing page',
+  }];
+  const currentHeader = [...CARD_HEADERS, 'existing-extra'];
+  const discovered = discoverCardHeaders(cards, currentHeader);
+
+  assert.deepEqual(discovered.slice(0, currentHeader.length), currentHeader);
+  assert.deepEqual(discovered.slice(currentHeader.length, currentHeader.length + 2), PHONE_HEADERS);
+  assert.ok(discovered.includes('card.source_detail'));
+  assert.ok(discovered.includes('custom_field.custom-extra-id'));
+});
+
+test('linhas escrevem os dois telefones e preservam o cabecalho existente', () => {
+  const cards = [{
+    id: 'card-2',
+    updated_at: '2026-09-28T12:00:00.000Z',
+    created_at: '2026-09-01T12:00:00.000Z',
+    phone: '+5531999998888',
+    custom_fields: [
+      { custom_field: '69e8d49592607a5877e699d5', value: '31988887777' },
+      { custom_field: 'custom-extra-id', value: 'extra-value' },
+    ],
+    source_detail: 'landing page',
+  }];
+  const currentHeader = [...CARD_HEADERS, 'existing-extra'];
+  const { header, rows } = buildCardSheet(cards, currentHeader);
+
+  assert.deepEqual(header.slice(0, currentHeader.length), currentHeader);
+  assert.equal(rows[0][currentHeader.length], '+5531999998888');
+  assert.equal(rows[0][currentHeader.length + 1], '31988887777');
+  assert.equal(rows[0][header.indexOf('card.source_detail')], 'landing page');
+  assert.equal(rows[0][header.indexOf('custom_field.custom-extra-id')], 'extra-value');
+  assert.equal(rows[0].length, header.length);
 });

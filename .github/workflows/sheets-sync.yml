@@ -4,6 +4,17 @@ on:
   schedule:
     - cron: "47 4,10,16,22 * * *"
   workflow_dispatch:
+    inputs:
+      cards_days:
+        description: "Dias para sincronizar cards Hablla, contando ate hoje"
+        required: false
+        default: "7"
+        type: string
+      cards_exhaustive:
+        description: "Percorrer todas as paginas para a carga retroativa"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: omie-api
@@ -39,7 +50,8 @@ jobs:
           HABLLA_PASSWORD: ${{ secrets.HABLLA_PASSWORD }}
           HABLLA_WORKSPACE_ID: ${{ secrets.HABLLA_WORKSPACE_ID }}
           HABLLA_BOARD_ID: ${{ secrets.HABLLA_BOARD_ID }}
-          HABLLA_CARDS_DAYS: ${{ vars.HABLLA_CARDS_DAYS || '7' }}
+          HABLLA_CARDS_DAYS: ${{ inputs.cards_days || vars.HABLLA_CARDS_DAYS || '7' }}
+          HABLLA_CARDS_EXHAUSTIVE: ${{ inputs.cards_exhaustive || 'false' }}
           HABLLA_CARDS_MAX_PAGES: ${{ vars.HABLLA_CARDS_MAX_PAGES || '2000' }}
           HABLLA_CARDS_PAGES_WITHOUT_RECENT_CREATED: ${{ vars.HABLLA_CARDS_PAGES_WITHOUT_RECENT_CREATED || '2' }}
           HABLLA_SPREADSHEET_ID: ${{ secrets.HABLLA_SPREADSHEET_ID }}

@@ -27,6 +27,44 @@ const CARD_HEADERS = [
   "Tags",
 ];
 
+const PHONE_HEADERS = ["Telefone", "Telefone (Campo)"];
+const PHONE_CUSTOM_FIELD_ID = "69e8d49592607a5877e699d5";
+const CUSTOM_FIELD_DISPLAY_NAMES = Object.freeze({
+  "67ca3b1b2a2005b0e7c0b67f": "utm_medium",
+  "67ca3ad19698c9a231679c09": "utm_source",
+  "67ca3d7709af47405f94b336": "Página de Conversão",
+  "6a341e0a9794a6f45768e4c8": "Cidade",
+  "6a34243f43dae636168814f5": "Browser",
+  "6a34240d54956e3f17031590": "CEP_Conversao",
+  "6a342421be3df912c7e28014": "Device Mobile",
+  "6a342458ddddb2628027186c": "Data/Hora de Entrada no Site",
+  "6a34244898b6bf2dfd2796b2": "Dimensões da Tela",
+  "6a342434c2e6bd1fdedab9ca": "Sistema Operacional do Device",
+  "6a3424608582742305e4af34": "Origin",
+  "6a341b60fbf9c9ef3b3bff65": "ID da Conversão no Site",
+  "67ca3b3bfa1aacf9258e4dbb": "utm_campaign",
+  "67ca3cc6abf8dede928b7f07": "utm_content",
+  "67ca3c4d75a80329df8eeff5": "utm_term",
+  "6a1494ab3dae0a68cd239a93": "Cidade - Preferência",
+  "6a14950aa329fb75151f7dae": "Unidade - Preferência",
+  "67b5fd0a6ee6fcbb66ae93c2": "Loja de agendamento",
+  "67b5fc4b9d6e187ed4fa31fa": "Motivo do não agendamento?",
+  "67b5fd5e5f04cc2397fc2fd3": "Observação do não agendamento",
+  "67b5fbad827b187ab70ab641": "Agendamento realizado?",
+  [PHONE_CUSTOM_FIELD_ID]: "Telefone (Campo)",
+});
+const BASE_CARD_KEYS = new Set([
+  "updated_at", "created_at", "workspace", "board", "list", "name",
+  "description", "source", "status", "finished_at", "id", "phone",
+  "tags", "user", "custom_fields",
+]);
+const BASE_CUSTOM_FIELD_IDS = new Set([
+  "67b39131ee792966f3fba492",
+  "67b608470787782ce7acafba",
+  "67dc6a0a17925c23d8365708",
+  "679120ec177ff6d2c7597156",
+]);
+
 const ATTENDANT_HEADERS = [
   "Data",
   "Workspace ID",
@@ -218,6 +256,115 @@ function assertRowWidth(rows, width, dataset) {
   }
 }
 
+function customFieldHeader(id) {
+  return CUSTOM_FIELD_DISPLAY_NAMES[id] || `custom_field.${id}`;
+}
+
+function customFieldIdForHeader(header) {
+  if (header.startsWith("custom_field.")) {
+    return header.slice("custom_field.".length);
+  }
+  return Object.entries(CUSTOM_FIELD_DISPLAY_NAMES)
+    .find(([, display]) => display === header)?.[0] || "";
+}
+
+function cellValue(value) {
+  if (value === null || value === undefined || value === "") return "";
+  return typeof value === "object" ? JSON.stringify(value) : value;
+}
+
+function columnLetter(index) {
+  let value = index + 1;
+  let result = "";
+  while (value > 0) {
+    value -= 1;
+    result = String.fromCharCode(65 + (value % 26)) + result;
+    value = Math.floor(value / 26);
+  }
+  return result;
+}
+
+function discoverCardHeaders(cards, currentHeader = CARD_HEADERS) {
+  const header = [...currentHeader].map((value) => String(value || "").trim());
+  if (!header.length || header.every((value) => !value)) header.push(...CARD_HEADERS);
+  if (header.length < CARD_HEADERS.length ||
+      CARD_HEADERS.some((value, index) => header[index] !== value)) {
+    throw new Error("Cabecalho existente da Base Hablla Card nao corresponde as colunas atuais; escrita cancelada");
+  }
+  if (header.some((value) => !value) || new Set(header).size !== header.length) {
+    throw new Error("Cabecalho existente da Base Hablla Card possui coluna vazia ou duplicada");
+  }
+
+  const known = new Set(header);
+  for (const phoneHeader of PHONE_HEADERS) {
+    if (!known.has(phoneHeader)) {
+      header.push(phoneHeader);
+      known.add(phoneHeader);
+    }
+  }
+
+  const discovered = new Set();
+  for (const card of cards) {
+    for (const key of Object.keys(card)) {
+      if (!BASE_CARD_KEYS.has(key)) discovered.add(`card.${key}`);
+    }
+    for (const field of Array.isArray(card.custom_fields) ? card.custom_fields : []) {
+      const id = field?.custom_field == null ? "" : String(field.custom_field);
+      if (id && !BASE_CUSTOM_FIELD_IDS.has(id) && id !== PHONE_CUSTOM_FIELD_ID) {
+        discovered.add(customFieldHeader(id));
+      }
+    }
+  }
+
+  const knownCustomIds = new Set(header.map(customFieldIdForHeader).filter(Boolean));
+  const additions = [...discovered]
+    .filter((value) => !known.has(value) && !knownCustomIds.has(customFieldIdForHeader(value)))
+    .sort((left, right) => left.localeCompare(right, "en"));
+  return [...header, ...additions];
+}
+
+function buildCardSheet(cards, currentHeader, collaboratorNames = {}) {
+  const header = discoverCardHeaders(cards, currentHeader);
+  const rows = cards.map((card) => {
+    const fields = new Map();
+    for (const field of Array.isArray(card.custom_fields) ? card.custom_fields : []) {
+      const id = field?.custom_field == null ? "" : String(field.custom_field);
+      if (id) fields.set(id, field.value);
+    }
+    const customFields = [
+      "67b39131ee792966f3fba492",
+      "67b608470787782ce7acafba",
+      "67dc6a0a17925c23d8365708",
+      "679120ec177ff6d2c7597156",
+    ].map((id) => fields.get(id) ?? "");
+    const userId = card.user && typeof card.user === "object"
+      ? card.user.id || ""
+      : card.user || "";
+    const base = [
+      GoogleSheets.dateTimeCell(formatBrazilianDateTime(card.updated_at)),
+      GoogleSheets.dateTimeCell(formatBrazilianDateTime(card.created_at)),
+      card.workspace || "", card.board || "", card.list || "",
+      ...customFields.slice(0, 3),
+      card.name || "", card.description || "", card.source || "",
+      card.status || "", userId,
+      GoogleSheets.dateTimeCell(formatBrazilianDateTime(card.finished_at)),
+      card.id, collaboratorNames[userId] || "", customFields[3],
+      (card.tags || []).map((tag) => tag.name).join(", "),
+    ];
+    return header.map((name, index) => {
+      if (index < CARD_HEADERS.length) return base[index];
+      if (name === "Telefone") return cellValue(card.phone);
+      if (name === "Telefone (Campo)") return cellValue(fields.get(PHONE_CUSTOM_FIELD_ID));
+      const id = customFieldIdForHeader(name);
+      if (id) return cellValue(fields.get(id));
+      if (name.startsWith("card.")) return cellValue(card[name.slice(5)]);
+      return "";
+    });
+  });
+  assertRowWidth(rows, header.length, "Base Hablla Card");
+  return { header, rows };
+}
+
 async function run() {
   try {
     const {
@@ -314,44 +461,22 @@ async function run() {
         passes,
         attempts,
       });
-      const customFieldIds = [
-        "67b39131ee792966f3fba492",
-        "67b608470787782ce7acafba",
-        "67dc6a0a17925c23d8365708",
-        "679120ec177ff6d2c7597156",
-      ];
-      const cardRows = cards.map((card) => {
-        const customFields = ["", "", "", ""];
-        for (const field of card.custom_fields || []) {
-          const index = customFieldIds.indexOf(field.custom_field);
-          if (index !== -1) customFields[index] = field.value;
-        }
-        const userId =
-          card.user && typeof card.user === "object"
-            ? card.user.id || ""
-            : card.user || "";
-        return [
-          GoogleSheets.dateTimeCell(formatBrazilianDateTime(card.updated_at)),
-          GoogleSheets.dateTimeCell(formatBrazilianDateTime(card.created_at)),
-          card.workspace || "",
-          card.board || "",
-          card.list || "",
-          customFields[0],
-          customFields[1],
-          customFields[2],
-          card.name || "",
-          card.description || "",
-          card.source || "",
-          card.status || "",
-          userId,
-          GoogleSheets.dateTimeCell(formatBrazilianDateTime(card.finished_at)),
-          card.id,
-          collaboratorNames[userId] || "",
-          customFields[3],
-          (card.tags || []).map((tag) => tag.name).join(", "),
-        ];
-      });
-      assertRowWidth(cardRows, CARD_HEADERS.length, "Base Hablla Card");
+      const existingHeaderRows = await sheets.getValues(
+        "'Base Hablla Card'!A1:ZZ1",
+      );
+      const existingHeader = existingHeaderRows.find((row) =>
+        row.some((value) => String(value || "").trim()),
+      ) || CARD_HEADERS;
+      const { header: cardHeader, rows: cardRows } = buildCardSheet(
+        cards,
+        existingHeader,
+        collaboratorNames,
+      );
+      const columnRange = `A:${columnLetter(cardHeader.length - 1)}`;
+      const addedColumns = cardHeader.length - existingHeader.length;
+      if (addedColumns > 0) {
+        log(`Adicionando ${addedColumns} colunas novas a direita; Telefone e Telefone (Campo) tem prioridade.`);
+      }
       if (!cardRows.length && !allowEmpty) {
         throw new Error("Hablla retornou zero cards; substituicao cancelada");
       }
@@ -359,8 +484,8 @@ async function run() {
       const cardIds = new Set(cardRows.map((row) => String(row[14])));
       const cardResult = await sheets.replaceRows({
         sheetTitle: "Base Hablla Card",
-        columnRange: "A:R",
-        header: CARD_HEADERS,
+        columnRange,
+        header: cardHeader,
         newRows: cardRows,
         matchColumnIndexes: [1, 14],
         shouldReplace: (row) =>
@@ -454,10 +579,14 @@ async function run() {
 module.exports = run;
 module.exports.uniqueAttendantRows = uniqueAttendantRows;
 module.exports._internals = {
+  CARD_HEADERS,
+  PHONE_HEADERS,
   assertEmptyAttendantDaysAreSafe,
   booleanOption,
+  buildCardSheet,
   collectCardSnapshots,
   completedDayRanges,
+  discoverCardHeaders,
   selectedDatasets,
   shouldReplaceCardRow,
 };
