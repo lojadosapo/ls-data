@@ -29,7 +29,7 @@ function cellValue(cell) {
   return value.stringValue;
 }
 
-function createLayoutHarness({ header, initialRows, gridRowCount, afterDelete }) {
+function createLayoutHarness({ header, initialRows, gridRowCount, gridColumnCount = header.length, afterDelete }) {
   const sheets = new GoogleSheets({
     spreadsheetId: "layout-test",
     accessToken: "test-token",
@@ -38,6 +38,7 @@ function createLayoutHarness({ header, initialRows, gridRowCount, afterDelete })
     header: [...header],
     rows: initialRows.map((row) => [...row]),
     gridRowCount,
+    gridColumnCount,
   };
   const batchCalls = [];
 
@@ -46,7 +47,7 @@ function createLayoutHarness({ header, initialRows, gridRowCount, afterDelete })
       sheetId: 41,
       gridProperties: {
         rowCount: state.gridRowCount,
-        columnCount: header.length,
+        columnCount: state.gridColumnCount,
       },
     },
   });
@@ -96,7 +97,11 @@ function createLayoutHarness({ header, initialRows, gridRowCount, afterDelete })
         state.gridRowCount -= endIndex - startIndex;
         afterDelete?.(state);
       } else if (request.appendDimension) {
-        state.gridRowCount += request.appendDimension.length;
+        if (request.appendDimension.dimension === "COLUMNS") {
+          state.gridColumnCount += request.appendDimension.length;
+        } else {
+          state.gridRowCount += request.appendDimension.length;
+        }
       } else if (request.updateCells) {
         const { range, rows } = request.updateCells;
         if (range.startRowIndex === 0) {
@@ -219,6 +224,39 @@ test("replaceRows amplia somente o deficit de linhas antes do updateCells", asyn
     harness.state.rows,
     [["NOVO-1", ""], ["NOVO-2", ""], ["NOVO-3", ""]],
   );
+});
+
+test("replaceRows amplia colunas novas a direita antes de escrever cabecalho e linhas", async () => {
+  const header = ["Chave", "Valor", "Telefone", "Telefone (Campo)"];
+  const harness = createLayoutHarness({
+    header,
+    gridRowCount: 10,
+    gridColumnCount: 2,
+    initialRows: [["ALVO", "antigo"]],
+  });
+
+  await harness.sheets.replaceRows({
+    sheetTitle: "Base",
+    columnRange: "A:D",
+    header,
+    newRows: [["NOVO", "valor", "+5531999998888", "03199998877"]],
+    matchColumnIndexes: [0],
+    shouldReplace: (row) => row[0] === "ALVO" || row[0] === "NOVO",
+  });
+
+  const requests = harness.batchCalls[0].requests;
+  const appendIndex = requests.findIndex(
+    (request) => request.appendDimension?.dimension === "COLUMNS",
+  );
+  const headerWriteIndex = requests.findIndex(
+    (request) => request.updateCells?.range?.startRowIndex === 0,
+  );
+  assert.equal(requests[appendIndex].appendDimension.length, 2);
+  assert.ok(appendIndex < headerWriteIndex);
+  assert.equal(harness.state.gridColumnCount, 4);
+  assert.deepEqual(harness.state.header, header);
+  assert.equal(harness.state.rows[0][2], "+5531999998888");
+  assert.equal(harness.state.rows[0][3], "03199998877");
 });
 
 test("milhares de datas contiguas geram um unico bloco de formato", async () => {

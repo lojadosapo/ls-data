@@ -673,6 +673,10 @@ class GoogleSheets {
     if (!Number.isInteger(gridRowCount) || gridRowCount < 1) {
       throw new Error(`rowCount invalido para a aba: ${sheetTitle}`);
     }
+    const gridColumnCount = Number(sheetProperties.gridProperties?.columnCount);
+    if (!Number.isInteger(gridColumnCount) || gridColumnCount < 1) {
+      throw new Error(`columnCount invalido para a aba: ${sheetTitle}`);
+    }
 
     const preWriteState = await readState();
     if (
@@ -720,6 +724,14 @@ class GoogleSheets {
         insertDimension: {
           range: { sheetId, dimension: "ROWS", startIndex: 0, endIndex: 1 },
           inheritFromBefore: false,
+        },
+      });
+    if (comparisonWidth > gridColumnCount)
+      requests.push({
+        appendDimension: {
+          sheetId,
+          dimension: "COLUMNS",
+          length: comparisonWidth - gridColumnCount,
         },
       });
     requests.push({
