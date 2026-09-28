@@ -15,6 +15,11 @@ on:
         required: false
         default: false
         type: boolean
+      cards_only:
+        description: "Executar somente a sincronizacao da Base Hablla Card"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: omie-api
@@ -37,9 +42,14 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Sincronizar planilhas
-        run: node src/sheets/run.js omie/sheets/sync.js hablla/sheets/sync.js
+        run: |
+          if [ "${{ inputs.cards_only }}" = "true" ]; then
+            node src/sheets/run.js hablla/sheets/sync.js
+          else
+            node src/sheets/run.js omie/sheets/sync.js hablla/sheets/sync.js
+          fi
         env:
-          REQUIRED_ENV: GOOGLE_CLIENT_EMAIL,GOOGLE_PRIVATE_KEY,OMIE_CREDENTIALS,OMIE_SHEETS_SPREADSHEET_ID,HABLLA_TOKEN,HABLLA_WORKSPACE_ID,HABLLA_BOARD_ID,HABLLA_SPREADSHEET_ID,HABLLA_COLLABORATORS_SPREADSHEET_ID
+          REQUIRED_ENV: ${{ inputs.cards_only && 'GOOGLE_CLIENT_EMAIL,GOOGLE_PRIVATE_KEY,HABLLA_TOKEN,HABLLA_WORKSPACE_ID,HABLLA_BOARD_ID,HABLLA_SPREADSHEET_ID,HABLLA_COLLABORATORS_SPREADSHEET_ID' || 'GOOGLE_CLIENT_EMAIL,GOOGLE_PRIVATE_KEY,OMIE_CREDENTIALS,OMIE_SHEETS_SPREADSHEET_ID,HABLLA_TOKEN,HABLLA_WORKSPACE_ID,HABLLA_BOARD_ID,HABLLA_SPREADSHEET_ID,HABLLA_COLLABORATORS_SPREADSHEET_ID' }}
           GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
           GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
           OMIE_CREDENTIALS: ${{ secrets.OMIE_CREDENTIALS }}
@@ -52,6 +62,7 @@ jobs:
           HABLLA_BOARD_ID: ${{ secrets.HABLLA_BOARD_ID }}
           HABLLA_CARDS_DAYS: ${{ inputs.cards_days || vars.HABLLA_CARDS_DAYS || '7' }}
           HABLLA_CARDS_EXHAUSTIVE: ${{ inputs.cards_exhaustive || 'false' }}
+          HABLLA_SHEETS_DATASETS: ${{ inputs.cards_only && 'cards' || vars.HABLLA_SHEETS_DATASETS || 'cards,attendants' }}
           HABLLA_CARDS_MAX_PAGES: ${{ vars.HABLLA_CARDS_MAX_PAGES || '2000' }}
           HABLLA_CARDS_PAGES_WITHOUT_RECENT_CREATED: ${{ vars.HABLLA_CARDS_PAGES_WITHOUT_RECENT_CREATED || '2' }}
           HABLLA_SPREADSHEET_ID: ${{ secrets.HABLLA_SPREADSHEET_ID }}
